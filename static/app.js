@@ -271,7 +271,7 @@ function applyProjectNatives(st) {
   redrawQuiet();
 }
 
-const stripPdf = (n) => n.replace(/\.pdf$/i, "");
+const stripPdf = (n) => n.replace(/\.(pdf|pdmdoc)$/i, "");
 function fitName() { nameInput.style.width = Math.min(Math.max(nameInput.value.length + 2, 10), 40) + "ch"; }
 nameInput.addEventListener("input", fitName);
 nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") nameInput.blur(); });

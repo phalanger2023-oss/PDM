@@ -8,6 +8,17 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.4.0", "date": "2026-11-22",
+        "nouveautes": [
+            "Documents texte, façon Word / Google Docs : sur l'accueil, « Nouveau document texte » ouvre une feuille blanche à écrire. Ils sont rangés dans les mêmes dossiers que tes PDF (vignette, renommer, déplacer, supprimer, glisser-déposer).",
+            "Mise en forme : styles (Titre 1 à 3, citation), police, taille, gras / italique / souligné / barré, exposant / indice, couleur du texte et surlignage, alignement, listes à puces et numérotées, retraits, liens, images, tableaux (ajout / suppression de lignes et colonnes), ligne de séparation, annuler / rétablir. Enregistrement automatique (Ctrl+S pour forcer).",
+            "Exporter : PDF, Word (.docx), ou « Créer un PDF à annoter dans PDM » (le PDF arrive dans le même dossier ; le document texte reste modifiable).",
+            "Importer un fichier Word (.docx) depuis l'accueil pour le modifier ici.",
+        ],
+        "ameliorations": [],
+        "corrections": [],
+    },
+    {
         "version": "1.3.0", "date": "2026-11-22",
         "nouveautes": [
             "Accueil en dossiers, façon écran d'accueil : des dossiers et des documents côte à côte, des dossiers dans des dossiers, autant que tu veux. Bouton « Nouveau dossier », fil d'Ariane cliquable pour remonter.",

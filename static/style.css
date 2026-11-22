@@ -173,9 +173,14 @@ input[type=color] { width: calc(34px * var(--ui)); height: calc(30px * var(--ui)
 body[data-view="home"] .doc-only,
 body[data-view="home"] .ctxbar,
 body[data-view="home"] .thumbs,
-body[data-view="home"] #progress { display: none !important; }
-body[data-view="home"] #viewer { display: none; }
-body[data-view="doc"] #home { display: none; }
+body[data-view="home"] #progress,
+body[data-view="text"] .doc-only,
+body[data-view="text"] .ctxbar,
+body[data-view="text"] .thumbs,
+body[data-view="text"] #progress { display: none !important; }
+body[data-view="home"] #viewer, body[data-view="text"] #viewer { display: none; }
+body[data-view="doc"] #home, body[data-view="text"] #home { display: none; }
+body:not([data-view="text"]) #textView { display: none; }
 body.dragging #viewer, body.dragging .home { outline: 3px dashed var(--accent); outline-offset: -12px; }
 
 .savestate { font-size: .82em; color: var(--muted); white-space: nowrap; min-width: 6.5em; }
@@ -494,3 +499,30 @@ details.rel > summary { cursor: pointer; display: flex; align-items: baseline; g
 .pick-row:hover { background: var(--surface); }
 .pick-row .ic { width: 18px; height: 18px; flex: none; }
 .pick-actions { display: flex; justify-content: flex-end; }
+
+/* Éditeur de texte (façon Word) */
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+.textview { display: flex; flex-direction: column; height: calc(100vh - 54px); background: var(--bg, #f1f3f4); }
+.tx-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 14px; display: flex; flex-direction: column; gap: 8px; position: relative; z-index: 5; }
+.tx-row { display: flex; align-items: center; gap: 6px; }
+.tx-title { gap: 10px; }
+.tx-name { flex: 1; min-width: 0; font: inherit; font-size: 18px; font-weight: 600; color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 4px 8px; }
+.tx-name:hover, .tx-name:focus { border-color: var(--border); background: var(--bg, #fff); outline: none; }
+.tx-tools { flex-wrap: wrap; row-gap: 4px; }
+.tx-btn { min-width: 32px; height: 32px; padding: 0 7px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.tx-btn:hover { background: var(--hover, rgba(0,0,0,.07)); }
+.tx-btn[hidden] { display: none; }
+.tx-tbl { font-size: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.tx-sel { height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; padding: 0 4px; }
+.tx-sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+.tx-color input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.tx-color { position: relative; }
+.tx-menu { position: absolute; right: 14px; top: 46px; z-index: 20; display: flex; flex-direction: column; min-width: 280px; }
+.tx-menu[hidden] { display: none; }
+.tx-scroll { flex: 1; overflow: auto; padding: 24px 12px 80px; }
+.tx-paper { box-sizing: border-box; width: min(794px, 100%); min-height: 1050px; margin: 0 auto; background: #fff; color: #202124; padding: 72px 76px; box-shadow: var(--shadow-lg); border-radius: 2px; outline: none; font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; overflow-wrap: anywhere; }
+.tx-paper h1 { font-size: 24pt; margin: .6em 0 .3em; } .tx-paper h2 { font-size: 17pt; margin: .6em 0 .3em; } .tx-paper h3 { font-size: 13pt; margin: .6em 0 .3em; }
+.tx-paper p { margin: 0 0 .6em; } .tx-paper blockquote { margin: .6em 0 .6em 1em; padding-left: 1em; border-left: 3px solid #ccc; color: #555; }
+.tx-paper table { border-collapse: collapse; max-width: 100%; margin: .5em 0; } .tx-paper td, .tx-paper th { border: 1px solid #999; padding: 4px 8px; min-width: 40px; vertical-align: top; } .tx-paper th { background: #f1f3f4; }
+.tx-paper img { max-width: 100%; height: auto; } .tx-paper a { color: #1a56c4; } .tx-paper hr { border: 0; border-top: 1px solid #999; margin: 1em 0; }
+@media (max-width: 700px) { .tx-paper { padding: 28px 18px; } .tx-scroll { padding: 12px 4px 80px; } }

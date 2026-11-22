@@ -272,6 +272,25 @@
   <main id="viewer"></main>
 
   <!-- Accueil : tous vos documents, comme sur Canva -->
+  <!-- Éditeur de texte (façon Word) -->
+  <section id="textView" class="textview" aria-label="Document texte">
+    <div class="tx-bar" id="txBar">
+      <div class="tx-row tx-title">
+        <input id="txName" class="tx-name" type="text" aria-label="Nom du document" spellcheck="false">
+        <span class="savestate" id="txState" role="status" aria-live="polite"></span>
+        <button type="button" class="btn" id="txExport" aria-haspopup="menu">Exporter ▾</button>
+        <div class="cardmenu tx-menu" id="txExportMenu" hidden role="menu">
+          <button class="mi" role="menuitem" data-fmt="pdf">Télécharger en PDF</button>
+          <button class="mi" role="menuitem" data-fmt="docx">Télécharger en Word (.docx)</button>
+          <button class="mi" role="menuitem" data-fmt="topdf">Créer un PDF à annoter dans PDM</button>
+        </div>
+      </div>
+      <div class="tx-row tx-tools" id="txTools" role="toolbar" aria-label="Mise en forme"></div>
+    </div>
+    <div class="tx-scroll"><div id="txPaper" class="tx-paper" contenteditable="true" spellcheck="true" aria-label="Contenu du document"></div></div>
+    <input type="file" id="txImg" accept="image/*" hidden>
+  </section>
+
   <section id="home" class="home" aria-label="Vos documents">
     <div class="home-inner">
 
@@ -284,6 +303,12 @@
           <svg class="ic"><use href="#i-plus"/></svg> Ouvrir un PDF
           <input type="file" id="file2" accept="application/pdf" hidden>
         </label>
+        <div class="hero-actions">
+          <button type="button" class="btn big" id="newText"><svg class="ic"><use href="#i-pencil"/></svg> Nouveau document texte</button>
+          <label class="btn big"><svg class="ic"><use href="#i-folder"/></svg> Importer un Word (.docx)
+            <input type="file" id="docxIn" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+          </label>
+        </div>
         <p class="hint droptip">ou glissez un PDF n'importe où sur cette page</p>
       </header>
 
@@ -356,6 +381,7 @@
   <script src="/static/app.js"></script>
   <script src="/static/nav.js"></script>
   <script src="/static/home.js"></script>
+  <script src="/static/text.js"></script>
   <script src="/static/releases.js"></script>
 </body>
 </html>

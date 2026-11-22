@@ -24,6 +24,7 @@ function setRoute(name) {
 async function route() {
   const name = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
   if (name.startsWith("@/")) { cwd = name.slice(2); await goHome(); }
+  else if (/\.pdmdoc$/i.test(name)) await openText(name);
   else if (name) await openDoc(name);
   else { cwd = ""; await goHome(); }
 }
@@ -114,13 +115,13 @@ function renderResume() { // le document sur lequel vous avez travaillé en dern
   $("resume").hidden = !last;
   if (!last) return;
   const card = $("resumeCard");
-  card.onclick = () => openDoc(last.name);
+  card.onclick = () => (last.kind === "text" ? openText(last.name) : openDoc(last.name));
   card.setAttribute("aria-label", `Reprendre ${stripPdf(last.name)}`);
   $("resumeName").textContent = stripPdf(last.name);
   const rel = ago(last.modified);
   $("resumeDate").textContent = `Dernière modification : ${whenLong(last.modified)}` + (rel ? ` (${rel})` : "");
-  $("resumeMeta").textContent = (last.pages ? plural(last.pages, "page", "pages") : "PDF") + (last.draft ? " · modifications en cours" : "");
-  $("resumeImg").src = `/api/docs/${enc(last.name)}/thumb?v=${Math.round(last.modified)}`;
+  $("resumeMeta").textContent = last.kind === "text" ? "Document texte" : (last.pages ? plural(last.pages, "page", "pages") : "PDF") + (last.draft ? " · modifications en cours" : "");
+  $("resumeImg").src = `/api/${last.kind === "text" ? "texts" : "docs"}/${enc(last.name)}/thumb?v=${Math.round(last.modified)}`;
 }
 
 function visibleFolders() {
@@ -258,6 +259,7 @@ function buildFolder(f, searching) {
 }
 
 function buildCard(d) {
+  const isText = d.kind === "text";
   const title = stripPdf(d.name);
   const card = el("div", "card");
   card.draggable = true;
@@ -269,18 +271,18 @@ function buildCard(d) {
   const img = document.createElement("img");
   img.loading = "lazy";
   img.alt = "";
-  img.src = `/api/docs/${enc(d.name)}/thumb?v=${Math.round(d.modified)}`; // v : la miniature se rafraîchit quand le document change
+  img.src = `/api/${isText ? "texts" : "docs"}/${enc(d.name)}/thumb?v=${Math.round(d.modified)}`; // v : la miniature se rafraîchit quand le document change
   img.addEventListener("error", () => { img.remove(); tw.prepend(svgIcon("file", "ic xl")); });
   tw.appendChild(img);
   if (d.draft) { const b = el("span", "badge"); b.textContent = "Modifié"; tw.appendChild(b); }
   // Titre centré, puis la date de dernière modification et le nombre de pages
   const ct = el("div", "ct"); ct.textContent = title; ct.title = title;
   const cd = el("div", "cs"); cd.textContent = `Modifié · ${when(d.modified)}`; cd.title = whenLong(d.modified);
-  const cp = el("div", "cs"); cp.textContent = d.pages ? plural(d.pages, "page", "pages") : "PDF";
+  const cp = el("div", "cs"); cp.textContent = isText ? "Document texte" : d.pages ? plural(d.pages, "page", "pages") : "PDF";
   main.append(tw, ct);
   if (d.folder && $("docSearch").value.trim()) { const cf = el("div", "cs cfolder"); cf.textContent = "📁 " + d.folder; cf.title = d.folder; main.append(cf); }
   main.append(cd, cp);
-  main.addEventListener("click", () => openDoc(d.name));
+  main.addEventListener("click", () => (isText ? openText(d.name) : openDoc(d.name)));
 
   const mb = el("button", "tool menu-btn");
   mb.title = "Actions"; mb.setAttribute("aria-label", `Actions pour ${title}`); mb.setAttribute("aria-haspopup", "menu");
@@ -294,10 +296,11 @@ function buildCard(d) {
     b.addEventListener("click", (ev) => { ev.stopPropagation(); closeCardMenus(); fn(); });
     menu.appendChild(b);
   };
-  item("folder", "Ouvrir", "", () => openDoc(d.name));
+  item("folder", "Ouvrir", "", () => (isText ? openText(d.name) : openDoc(d.name)));
   item("pencil", "Renommer", "", () => renameFromHome(d));
   item("folder", "Déplacer vers…", "", async () => { const to = await pickFolder(`Déplacer « ${title} » vers`); if (to !== null) await moveDoc(d.name, to); });
-  item("download", "Télécharger le PDF", "", () => downloadFromHome(d));
+  if (isText) { item("download", "Exporter en PDF", "", () => exportText(d.name, "pdf")); item("download", "Exporter en Word (.docx)", "", () => exportText(d.name, "docx")); }
+  else item("download", "Télécharger le PDF", "", () => downloadFromHome(d));
   if (d.draft) item("undo", "Revenir à l'original", "", () => resetFromHome(d));
   item("trash", "Supprimer", "danger", () => deleteFromHome(d));
   mb.addEventListener("click", (ev) => {
@@ -323,7 +326,7 @@ async function renameFromHome(d) {
   const cur = stripPdf(d.name);
   const want = prompt("Nouveau nom du document :", cur);
   if (want === null || !want.trim() || want.trim() === cur) return;
-  const res = await fetch(`/api/docs/${enc(d.name)}/rename`, {
+  const res = await fetch(`/api/${d.kind === "text" ? "texts" : "docs"}/${enc(d.name)}/rename`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ newName: want.trim() }),
   });
   const data = await res.json().catch(() => ({}));

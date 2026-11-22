@@ -22,6 +22,7 @@ import pymupdf  # PyMuPDF : la bibliothèque qui lit et modifie les PDF
 from flask import Flask, Response, abort, jsonify, redirect, request, send_file, send_from_directory, session
 
 import pdfedit as pe
+import textdocs
 from releases import RELEASES, VERSION  # moteur de texte riche et d'édition du contenu natif
 
 BASE = Path(__file__).parent
@@ -560,9 +561,13 @@ def list_docs():
             pass
         items.append({"name": p.name, "size": st.st_size, "modified": modified, "draft": draft, "pages": pages,
                       "folder": norm_path((meta.get(p.name) or {}).get("dossier", ""))})
+    for p in DOCS.glob("*.pdmdoc"):  # documents texte (façon Word)
+        st = p.stat()
+        items.append({"name": p.name, "size": st.st_size, "modified": st.st_mtime, "draft": False, "pages": 0, "kind": "text",
+                      "folder": norm_path((meta.get(p.name) or {}).get("dossier", ""))})
     items.sort(key=lambda i: i["modified"], reverse=True)
     if CACHE.exists():  # ménage : miniatures de documents qui n'existent plus (recalculables, donc sans risque)
-        known = {i["name"][:-4] for i in items}
+        known = {i["name"].rsplit(".", 1)[0] for i in items}
         for t in CACHE.glob("*.png"):
             if t.stem not in known and not t.name.endswith(".tmp.png"):
                 try:
@@ -658,7 +663,7 @@ def folder_delete():
 
 @app.post("/api/docs/<name>/move")
 def doc_move(name):
-    p = doc_file(name)
+    p = text_file(name) if name.lower().endswith(".pdmdoc") else doc_file(name)
     if not p.exists():
         return jsonify(error="Document introuvable"), 404
     to = norm_path((request.get_json(silent=True) or {}).get("folder"))
@@ -884,6 +889,8 @@ def doc_image(name, xref):
 
 @app.delete("/api/docs/<name>")
 def doc_delete(name):
+    if name.lower().endswith(".pdmdoc"):
+        return text_delete(name)
     p = doc_file(name)
     for f in (p, project_file(name), thumb_file(name)):
         try:
@@ -896,6 +903,165 @@ def doc_delete(name):
         remember(old.get("dossier", ""))
         write_dossiers(m)
     return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- Documents texte (façon Word / Google Docs)
+def text_file(name):
+    raw = re.sub(r"\.pdmdoc$", "", (name or "").strip(), flags=re.I)
+    raw = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", raw).strip(" .")[:120] or "Document"
+    if raw.upper() in RESERVED:
+        raw = "_" + raw
+    return DOCS / (raw + ".pdmdoc")
+
+
+def unique_text_name(stem):
+    p, n = text_file(stem), 1
+    base = p.name[:-7]
+    while p.exists():
+        n += 1
+        p = DOCS / f"{base} ({n}).pdmdoc"
+    return p.name
+
+
+def _text_thumb(p):
+    t = CACHE / (p.stem + ".txt.png")
+    if not t.exists() or t.stat().st_mtime < p.stat().st_mtime:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        t.write_bytes(textdocs.pdf_first_page_png(textdocs.html_to_pdf(p.read_text(encoding="utf-8"))))
+    return t
+
+
+@app.post("/api/texts")
+def text_create():
+    b = request.get_json(silent=True) or {}
+    name = unique_text_name(str(b.get("name") or "Document sans titre"))
+    (DOCS / name).write_text("", encoding="utf-8")
+    where = norm_path(b.get("folder"))
+    if where:
+        m = read_dossiers()
+        m[name] = {"dossier": where}
+        write_dossiers(m)
+        remember(where)
+    return jsonify(name=name)
+
+
+@app.post("/api/texts/import")
+def text_import():
+    """Ouvre un fichier Word (.docx) : il devient un document texte modifiable."""
+    f = request.files.get("file")
+    if f is None or not (f.filename or "").lower().endswith(".docx"):
+        return jsonify(error="Choisissez un fichier Word (.docx)."), 400
+    try:
+        html = textdocs.docx_to_html(f.read())
+    except Exception:
+        return jsonify(error="Ce fichier Word n'a pas pu être lu."), 400
+    name = unique_text_name(re.sub(r"\.docx$", "", f.filename, flags=re.I))
+    (DOCS / name).write_text(html, encoding="utf-8")
+    where = norm_path(request.form.get("folder"))
+    if where:
+        m = read_dossiers()
+        m[name] = {"dossier": where}
+        write_dossiers(m)
+        remember(where)
+    return jsonify(name=name)
+
+
+@app.get("/api/texts/<name>")
+def text_get(name):
+    p = text_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    return jsonify(name=p.name, html=p.read_text(encoding="utf-8"), modified=p.stat().st_mtime)
+
+
+@app.put("/api/texts/<name>")
+def text_put(name):
+    p = text_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    html = textdocs.sanitize_html((request.get_json(silent=True) or {}).get("html", ""))
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(html, encoding="utf-8")
+    tmp.replace(p)
+    return jsonify(ok=True, saved=p.stat().st_mtime)
+
+
+@app.post("/api/texts/<name>/rename")
+def text_rename(name):
+    p = text_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    want = str((request.get_json(silent=True) or {}).get("newName") or "").strip()
+    if not want:
+        return jsonify(error="Donnez un nom au document."), 400
+    new = text_file(want)
+    if new == p:
+        return jsonify(ok=True, name=p.name)
+    if new.exists():
+        return jsonify(error=f"Un document « {new.name} » existe déjà"), 409
+    p.rename(new)
+    m = read_dossiers()
+    if p.name in m:
+        m[new.name] = m.pop(p.name)
+        write_dossiers(m)
+    return jsonify(ok=True, name=new.name)
+
+
+def text_delete(name):
+    p = text_file(name)
+    p.unlink(missing_ok=True)
+    (CACHE / (p.stem + ".txt.png")).unlink(missing_ok=True)
+    m = read_dossiers()
+    old = m.pop(p.name, None)
+    if old is not None:
+        remember(old.get("dossier", ""))
+        write_dossiers(m)
+    return jsonify(ok=True)
+
+
+@app.get("/api/texts/<name>/thumb")
+def text_thumb(name):
+    p = text_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    try:
+        png = _text_thumb(p).read_bytes()
+    except Exception:
+        return jsonify(error="Miniature impossible"), 404
+    return Response(png, mimetype="image/png", headers={"Cache-Control": "max-age=60"})
+
+
+@app.get("/api/texts/<name>/export")
+def text_export(name):
+    """?fmt=pdf (défaut) ou docx. Le document enregistré est exporté tel quel."""
+    p = text_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    html, stem = p.read_text(encoding="utf-8"), p.name[:-7]
+    from urllib.parse import quote
+    if request.args.get("fmt") == "docx":
+        data = textdocs.html_to_docx(html)
+        mime, fn = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", f"{stem}.docx"
+    else:
+        data, mime, fn = textdocs.html_to_pdf(html, stem), "application/pdf", f"{stem}.pdf"
+    return Response(data, mimetype=mime, headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fn)}"})
+
+
+@app.post("/api/texts/<name>/to-pdf")
+def text_to_pdf(name):
+    """Fabrique un vrai PDF dans Mes documents (à annoter ensuite), dans le même dossier. Le document texte reste modifiable."""
+    p = text_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    pdf = textdocs.html_to_pdf(p.read_text(encoding="utf-8"), p.name[:-7])
+    out = unique_name(p.name[:-7] + ".pdf")
+    (DOCS / out).write_bytes(pdf)
+    where = norm_path((read_dossiers().get(p.name) or {}).get("dossier", ""))
+    if where:
+        m = read_dossiers()
+        m[out] = {"dossier": where}
+        write_dossiers(m)
+    return jsonify(name=out)
 
 
 # ---------------------------------------------------------------- Intégration DeepWell
