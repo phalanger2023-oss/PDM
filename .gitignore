@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+Mes documents/
+uploads/
+static/vendor/

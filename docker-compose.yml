@@ -1,0 +1,34 @@
+# Personal Document Modifier : même architecture que recettes-app (Docker Compose + Traefik + Let's Encrypt).
+# Prérequis sur le serveur : Traefik tourne déjà et le réseau Docker « traefik-public » existe.
+# Mode d'emploi complet : DEPLOIEMENT.md
+
+services:
+  pdf:
+    build: .
+    container_name: annotateur_pdf
+    restart: unless-stopped
+    env_file: .env                          # connexion (AUTH_USER, AUTH_HASH, SECRET_KEY, SESSION_DAYS)
+    environment:
+      - ENVIRONMENT=production
+      - BEHIND_PROXY=1
+    volumes:
+      - pdf_documents:/data/documents       # vos documents + les copies de sécurité (Originaux/)
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.pdf.rule=Host(`${PDF_HOST:-pdf.louisharicuisine.com}`)"
+      - "traefik.http.routers.pdf.entrypoints=websecure"
+      - "traefik.http.routers.pdf.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pdf.middlewares=security-headers@file"
+      - "traefik.http.services.pdf.loadbalancer.server.port=8000"
+      # La protection est assurée par la page de connexion du site lui-même (voir app.py)
+
+networks:
+  traefik-public:
+    external: true
+
+volumes:
+  pdf_documents:
+    name: annotateur_pdf_documents          # nom fixe : facilite les sauvegardes

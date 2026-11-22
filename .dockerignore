@@ -1,0 +1,10 @@
+.venv
+__pycache__
+*.pyc
+.git
+.env
+Mes documents
+uploads
+outils
+*.bat
+*.md

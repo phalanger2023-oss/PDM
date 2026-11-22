@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion · Personal Document Modifier</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <script src="/static/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="empty login-main">
+    <form class="empty-card login-card" id="form" autocomplete="on">
+      <div class="empty-icon">
+        <svg class="ic xl" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg>
+      </div>
+      <h1>Personal Document Modifier</h1>
+      <p class="hint">Connectez-vous pour accéder à vos documents.</p>
+
+      <label>Identifiant
+        <input id="user" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+      </label>
+      <label>Mot de passe
+        <input id="pw" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <label class="check"><input type="checkbox" id="remember" checked>
+        <span>Rester connecté (<span id="days">90</span> jours)</span></label>
+
+      <p id="err" class="err" role="alert" hidden></p>
+      <button class="btn primary big" type="submit" id="go">Se connecter</button>
+    </form>
+  </main>
+  <script src="/static/login.js"></script>
+</body>
+</html>
