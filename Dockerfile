@@ -17,7 +17,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn==23.0.0
 
-COPY app.py pdfedit.py releases.py ./
+COPY app.py pdfedit.py releases.py textdocs.py ./
 COPY static ./static
 COPY --from=pdfjs /w/node_modules/pdfjs-dist/build/pdf.min.js /w/node_modules/pdfjs-dist/build/pdf.worker.min.js ./static/vendor/
 
