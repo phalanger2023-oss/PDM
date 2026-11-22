@@ -8,6 +8,18 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.2.0", "date": "2026-11-22",
+        "nouveautes": [
+            "Dossiers : les documents déposés par DeepWell sont rangés par dossier (année / matière / chapitre). Un filtre « Tous les dossiers » apparaît sur l'accueil, le dossier est affiché sur chaque carte et la recherche en tient compte.",
+            "Lien avec DeepWell : sur l'accueil, « Lier à DeepWell » affiche la clé secrète à recopier dans DeepWell (Réglages → Google Drive → PDM). Avec cette clé, DeepWell dépose tout seul les documents de référence de tes cours. La clé ne permet pas de se connecter au site ; « Nouvelle clé » annule l'ancienne.",
+            "Le PDF d'origine (jamais modifié) peut être téléchargé tel quel, adresse « …/api/docs/NOM/pdf?dl=1 » : c'est le lien « document vierge » donné par DeepWell.",
+        ],
+        "ameliorations": [
+            "La liste de l'accueil n'est plus limitée à 60 documents (1000 maximum).",
+        ],
+        "corrections": [],
+    },
+    {
         "version": "1.1.0", "date": "2026-11-20",
         "nouveautes": [
             "Les formules et caractères spéciaux (qui ne pouvaient pas être touchés) sont maintenant déplaçables et supprimables, avec une copie nette. Ils ne sont pas modifiables.",

@@ -37,6 +37,9 @@ DOCS.mkdir(parents=True, exist_ok=True)
 PROJECTS = DOCS / ".brouillons"  # un fichier .json par document (vos modifications en cours)
 CACHE = DOCS / ".cache"          # miniatures de la page d'accueil (recalculables à tout moment)
 
+DOSSIERS = DOCS / ".dossiers.json"          # nom du document -> {"dossier": "année/matière/chapitre", "source": "deepwell:…"}
+CLE_FILE = DOCS / ".cle_integration"        # clé secrète qui autorise DeepWell à déposer des documents (voir plus bas)
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 Mo maximum
 
@@ -102,6 +105,42 @@ def _logged_in():
     return session.get("u") == AUTH_USER and session.get("v") == PW_VERSION
 
 
+def read_dossiers():
+    try:
+        d = json.loads(DOSSIERS.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_dossiers(d):
+    tmp = DOSSIERS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(DOSSIERS)
+
+
+def integration_key(new=False):
+    """La clé d'intégration (créée au premier besoin). Elle ne sert qu'à DeepWell, jamais à se connecter au site."""
+    if new or not CLE_FILE.exists():
+        CLE_FILE.write_text(secrets.token_urlsafe(32), encoding="utf-8")
+        try:
+            os.chmod(CLE_FILE, 0o600)
+        except OSError:
+            pass
+    return CLE_FILE.read_text(encoding="utf-8").strip()
+
+
+def _key_ok(ip):
+    """Vérifie l'en-tête X-PDM-Key (comparaison à temps constant) ; trop d'échecs d'une même adresse = blocage temporaire."""
+    if _too_many_fails(ip):
+        return False
+    given = request.headers.get("X-PDM-Key", "")
+    if given and hmac.compare_digest(given.encode(), integration_key().encode()):
+        return True
+    _FAILS.setdefault(ip, []).append(time.time())
+    return False
+
+
 @app.before_request
 def require_login():
     if not AUTH_ENABLED:
@@ -112,6 +151,8 @@ def require_login():
         if origin and urlparse(origin).netloc != request.host:
             abort(403)
     p = request.path
+    if p in ("/api/integration/ping", "/api/integration/docs"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
+        return None if _key_ok(request.remote_addr or "?") else (jsonify(error="Clé d'intégration refusée"), 401)
     if p in ("/login", "/api/login", "/api/me", "/healthz") or p.startswith("/static/"):
         return None
     if _logged_in():
@@ -433,6 +474,7 @@ def healthz():
 def list_docs():
     """Les PDF de Mes documents, du plus récemment travaillé au plus ancien (page d'accueil)."""
     items = []
+    meta = read_dossiers()
     for p in DOCS.glob("*.pdf"):
         st = p.stat()
         modified, draft = st.st_mtime, False
@@ -446,7 +488,8 @@ def list_docs():
             d.close()
         except Exception:
             pass
-        items.append({"name": p.name, "size": st.st_size, "modified": modified, "draft": draft, "pages": pages})
+        items.append({"name": p.name, "size": st.st_size, "modified": modified, "draft": draft, "pages": pages,
+                      "folder": (meta.get(p.name) or {}).get("dossier", "")})
     items.sort(key=lambda i: i["modified"], reverse=True)
     if CACHE.exists():  # ménage : miniatures de documents qui n'existent plus (recalculables, donc sans risque)
         known = {i["name"][:-4] for i in items}
@@ -456,7 +499,7 @@ def list_docs():
                     t.unlink()
                 except OSError:
                     pass
-    return jsonify(items[:60])
+    return jsonify(items[:1000])
 
 
 @app.post("/api/docs")
@@ -488,6 +531,8 @@ def doc_pdf(name):
     p = doc_file(name)
     if not p.exists():
         return jsonify(error="Document introuvable"), 404
+    if request.args.get("dl") == "1":  # « Télécharger l'original » : le PDF d'origine n'est jamais modifié par l'éditeur
+        return send_file(p, mimetype="application/pdf", max_age=0, as_attachment=True, download_name=p.name)
     return send_file(p, mimetype="application/pdf", max_age=0)
 
 
@@ -549,6 +594,10 @@ def doc_rename(name):
     if new.exists():
         return jsonify(error=f"Un document « {new.name} » existe déjà"), 409
     p.rename(new)
+    m = read_dossiers()
+    if p.name in m:
+        m[new.name] = m.pop(p.name)
+        write_dossiers(m)
     src, dst = project_file(p.name), project_file(new.name)
     if src.exists():  # le brouillon suit le document
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -667,7 +716,54 @@ def doc_delete(name):
             f.unlink(missing_ok=True)
         except OSError:
             pass
+    m = read_dossiers()
+    if m.pop(p.name, None) is not None:
+        write_dossiers(m)
     return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- Intégration DeepWell
+@app.get("/api/integration/key")
+def integration_key_get():
+    """La clé à recopier dans DeepWell (Réglages → Google Drive → PDM). Réservé à l'utilisateur connecté."""
+    return jsonify(key=integration_key())
+
+
+@app.post("/api/integration/key/renew")
+def integration_key_renew():
+    """Nouvelle clé : l'ancienne cesse de fonctionner (à recopier dans DeepWell)."""
+    return jsonify(key=integration_key(new=True))
+
+
+@app.get("/api/integration/ping")
+def integration_ping():
+    return jsonify(ok=True, app="PDM", version=VERSION)
+
+
+@app.post("/api/integration/docs")
+def integration_add_doc():
+    """DeepWell dépose un PDF de cours : champs « file », « folder » (année/matière/chapitre) et « source » (identifiant côté DeepWell,
+    pour ne jamais créer de doublon si la demande est rejouée). Renvoie le nom du document dans PDM."""
+    f = request.files.get("file")
+    source = str(request.form.get("source") or "")[:200]
+    folder = " / ".join(x.strip() for x in re.split(r"[/\\]", request.form.get("folder") or "") if x.strip())[:300]
+    if f is None:
+        return jsonify(error="Aucun fichier reçu"), 400
+    m = read_dossiers()
+    if source:
+        for name, info in m.items():
+            if info.get("source") == source and (DOCS / name).exists():
+                return jsonify(name=name, folder=info.get("dossier", ""), existing=True)
+    data = f.read()
+    try:
+        annotations_json(data)
+    except Exception:
+        return jsonify(error="Ce fichier n'est pas un PDF valide"), 400
+    name = unique_name(f.filename or "document.pdf")
+    (DOCS / name).write_bytes(data)
+    m[name] = {"dossier": folder, "source": source}
+    write_dossiers(m)
+    return jsonify(name=name, folder=folder, existing=False)
 
 
 if __name__ == "__main__":

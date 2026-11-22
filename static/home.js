@@ -73,8 +73,8 @@ try { docSort = localStorage.getItem("docSort") || "recent"; } catch (e) {}
 const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); // sans accents ni majuscules
 
 function visibleDocs() {
-  const q = fold($("docSearch").value.trim());
-  const list = docs.filter((d) => !q || fold(stripPdf(d.name)).includes(q));
+  const q = fold($("docSearch").value.trim()), fo = $("docFolder").value;
+  const list = docs.filter((d) => (!q || fold(stripPdf(d.name) + " " + (d.folder || "")).includes(q)) && (!fo || (d.folder || "") === fo));
   const by = {
     recent: (a, b) => b.modified - a.modified,
     old: (a, b) => a.modified - b.modified,
@@ -98,12 +98,23 @@ async function renderHome() {
   const res = await fetch("/api/docs");
   if (!res.ok) return;
   docs = await res.json();
+  fillFolders();
   const has = docs.length > 0;
   $("homeEmpty").hidden = has;
   $("library").hidden = !has;
   renderResume();
   renderGrid();
 }
+
+function fillFolders() { // liste des dossiers (créés par DeepWell) : le filtre n'apparaît que s'il y en a
+  const sel = $("docFolder"), cur = sel.value;
+  const names = [...new Set(docs.map((d) => d.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+  sel.replaceChildren(Object.assign(document.createElement("option"), { value: "", textContent: "Tous les dossiers" }),
+    ...names.map((n) => Object.assign(document.createElement("option"), { value: n, textContent: n })));
+  sel.value = names.includes(cur) ? cur : "";
+  sel.hidden = names.length === 0;
+}
+$("docFolder").addEventListener("change", renderGrid);
 
 function renderResume() { // le document sur lequel vous avez travaillé en dernier
   const last = [...docs].sort((a, b) => b.modified - a.modified)[0];
@@ -145,7 +156,9 @@ function buildCard(d) {
   const ct = el("div", "ct"); ct.textContent = title; ct.title = title;
   const cd = el("div", "cs"); cd.textContent = `Modifié · ${when(d.modified)}`; cd.title = whenLong(d.modified);
   const cp = el("div", "cs"); cp.textContent = d.pages ? plural(d.pages, "page", "pages") : "PDF";
-  main.append(tw, ct, cd, cp);
+  main.append(tw, ct);
+  if (d.folder) { const cf = el("div", "cs cfolder"); cf.textContent = "📁 " + d.folder; cf.title = d.folder; main.append(cf); }
+  main.append(cd, cp);
   main.addEventListener("click", () => openDoc(d.name));
 
   const mb = el("button", "tool menu-btn");
@@ -220,3 +233,23 @@ async function deleteFromHome(d) {
 
 // ---------- Démarrage : on reprend là où on était ----------
 route();
+
+
+// ---------- Lien avec DeepWell : la clé secrète à recopier dans DeepWell ----------
+$("linkShow").addEventListener("click", async () => {
+  const r = await fetch("/api/integration/key");
+  if (!r.ok) return;
+  $("linkKey").value = (await r.json()).key;
+  $("linkCopy").hidden = false;
+  $("linkKey").select();
+});
+$("linkCopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("linkKey").value); $("linkCopy").textContent = "Copié ✓"; setTimeout(() => { $("linkCopy").textContent = "Copier"; }, 1500); } catch (e) { $("linkKey").select(); }
+});
+$("linkRenew").addEventListener("click", async () => {
+  if (!confirm("Créer une nouvelle clé ? L'ancienne cessera de fonctionner : il faudra recopier la nouvelle dans DeepWell.")) return;
+  const r = await fetch("/api/integration/key/renew", { method: "POST" });
+  if (!r.ok) return;
+  $("linkKey").value = (await r.json()).key;
+  $("linkCopy").hidden = false;
+});

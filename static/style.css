@@ -469,3 +469,10 @@ details.rel > summary { cursor: pointer; display: flex; align-items: baseline; g
 .rel-date { color: var(--muted); font-size: .85em; }
 .rel-block h4 { margin: 10px 0 4px; font-size: .92em; color: var(--muted); }
 .rel-block ul { margin: 0; padding-left: 22px; } .rel-block li { margin: 3px 0; }
+
+/* Dossiers (documents déposés par DeepWell) et lien avec DeepWell */
+.cfolder { opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.linkbox { margin: 24px 0 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; max-width: 760px; }
+.linkbox summary { cursor: pointer; font-weight: 600; }
+.linkrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.linkrow input { flex: 1 1 260px; min-width: 0; font-family: monospace; }

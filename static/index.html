@@ -307,6 +307,9 @@
           <h2 class="section-title" id="libTitle">Tous vos documents <span class="count" id="docCount"></span></h2>
           <div class="lib-tools">
             <input type="search" id="docSearch" placeholder="Rechercher un document" aria-label="Rechercher un document" autocomplete="off" spellcheck="false">
+            <select id="docFolder" aria-label="Filtrer par dossier" hidden>
+              <option value="">Tous les dossiers</option>
+            </select>
             <select id="docSort" aria-label="Trier les documents">
               <option value="recent">Plus récents</option>
               <option value="old">Plus anciens</option>
@@ -318,6 +321,18 @@
         <div class="grid" id="grid"></div>
         <p class="no-match" id="noMatch" hidden>Aucun document ne correspond à votre recherche.</p>
       </section>
+
+      <!-- Lien avec DeepWell -->
+      <details class="linkbox" id="linkBox">
+        <summary>Lier à DeepWell</summary>
+        <p class="hint">DeepWell dépose ici les documents de référence de tes cours (dossiers année / matière / chapitre). Recopie cette clé dans DeepWell : Réglages → Google Drive → PDM. Ne la partage avec personne.</p>
+        <div class="linkrow">
+          <input type="text" id="linkKey" readonly placeholder="Clé secrète" aria-label="Clé d'intégration">
+          <button type="button" class="btn" id="linkShow">Afficher la clé</button>
+          <button type="button" class="btn" id="linkCopy" hidden>Copier</button>
+          <button type="button" class="btn" id="linkRenew">Nouvelle clé</button>
+        </div>
+      </details>
 
       <div class="home-empty" id="homeEmpty" hidden>
         <svg class="ic xl"><use href="#i-file"/></svg>
