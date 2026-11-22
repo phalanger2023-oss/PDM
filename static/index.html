@@ -304,12 +304,10 @@
       <!-- Tous les documents -->
       <section class="library" id="library" hidden aria-labelledby="libTitle">
         <div class="lib-head">
-          <h2 class="section-title" id="libTitle">Tous vos documents <span class="count" id="docCount"></span></h2>
+          <h2 class="section-title" id="libTitle">Vos documents <span class="count" id="docCount"></span></h2>
           <div class="lib-tools">
             <input type="search" id="docSearch" placeholder="Rechercher un document" aria-label="Rechercher un document" autocomplete="off" spellcheck="false">
-            <select id="docFolder" aria-label="Filtrer par dossier" hidden>
-              <option value="">Tous les dossiers</option>
-            </select>
+            <button type="button" class="btn" id="newFolder" title="Créer un dossier ici"><svg class="ic"><use href="#i-folder"/></svg> Nouveau dossier</button>
             <select id="docSort" aria-label="Trier les documents">
               <option value="recent">Plus récents</option>
               <option value="old">Plus anciens</option>
@@ -318,14 +316,15 @@
             </select>
           </div>
         </div>
+        <nav class="crumbs" id="crumbs" aria-label="Chemin du dossier"></nav>
         <div class="grid" id="grid"></div>
-        <p class="no-match" id="noMatch" hidden>Aucun document ne correspond à votre recherche.</p>
+        <p class="no-match" id="noMatch" hidden>Rien ne correspond ici.</p>
       </section>
 
       <!-- Lien avec DeepWell -->
       <details class="linkbox" id="linkBox">
         <summary>Lier à DeepWell</summary>
-        <p class="hint">DeepWell dépose ici les documents de référence de tes cours (dossiers année / matière / chapitre). Recopie cette clé dans DeepWell : Réglages → Google Drive → PDM. Ne la partage avec personne.</p>
+        <p class="hint">DeepWell dépose ici les documents de référence de tes cours (dans le dossier « Scolaire » : année / matière / chapitre). Recopie cette clé dans DeepWell : Réglages → Google Drive → PDM. Ne la partage avec personne.</p>
         <div class="linkrow">
           <input type="text" id="linkKey" readonly placeholder="Clé secrète" aria-label="Clé d'intégration">
           <button type="button" class="btn" id="linkShow">Afficher la clé</button>
@@ -342,6 +341,7 @@
       <p class="rel-foot"><button type="button" id="relBtn" class="rel-link" title="Notes de version">alpha</button></p>
     </div>
   </section>
+  <dialog id="pickDlg" class="rel-dlg pick-dlg" aria-label="Déplacer vers"><h3 id="pickTitle"></h3><div id="pickList" class="pick-list"></div><div class="pick-actions"><button type="button" class="btn" id="pickCancel">Annuler</button></div></dialog>
   <dialog id="relDlg" class="rel-dlg" aria-label="Notes de version">
     <div class="rel-top"><h2>Notes de version</h2><button type="button" id="relClose" class="tool" aria-label="Fermer">✕</button></div>
     <div id="relBody"></div>

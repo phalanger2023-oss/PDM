@@ -164,6 +164,7 @@ async function openUpload(file) { // un PDF choisi sur l'ordinateur : il est cop
   notify("Envoi du PDF…", "ok", 8000);
   const form = new FormData();
   form.append("file", file);
+  if (typeof cwd === "string" && cwd) form.append("folder", cwd);
   const res = await fetch("/api/docs", { method: "POST", body: form });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { fail(data.error || "Erreur à l'envoi"); return; }

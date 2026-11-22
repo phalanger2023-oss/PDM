@@ -15,14 +15,17 @@ function svgIcon(name, cls = "ic") { // une icône de la page (définie dans ind
 // ---------- Adresse de la page : #/Nom.pdf = document ouvert, #/ = accueil ----------
 // Recharger la page (ou la fermer et la rouvrir par son adresse) ramène donc sur le même document.
 let suppressHash = false;
+let cwd = "";          // dossier affiché à l'accueil ("" = l'accueil lui-même)
+let folders = [];      // tous les dossiers : { path, name, parent, items }
 function setRoute(name) {
-  const h = name ? "#/" + encodeURIComponent(name) : "#/";
+  const h = name ? "#/" + encodeURIComponent(name) : cwd ? "#/" + encodeURIComponent("@/" + cwd) : "#/";
   if (location.hash !== h) { suppressHash = true; location.hash = h; }
 }
 async function route() {
   const name = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
-  if (name) await openDoc(name);
-  else await goHome();
+  if (name.startsWith("@/")) { cwd = name.slice(2); await goHome(); }
+  else if (name) await openDoc(name);
+  else { cwd = ""; await goHome(); }
 }
 window.addEventListener("hashchange", () => {
   if (suppressHash) { suppressHash = false; return; }
@@ -73,8 +76,8 @@ try { docSort = localStorage.getItem("docSort") || "recent"; } catch (e) {}
 const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); // sans accents ni majuscules
 
 function visibleDocs() {
-  const q = fold($("docSearch").value.trim()), fo = $("docFolder").value;
-  const list = docs.filter((d) => (!q || fold(stripPdf(d.name) + " " + (d.folder || "")).includes(q)) && (!fo || (d.folder || "") === fo));
+  const q = fold($("docSearch").value.trim());
+  const list = docs.filter((d) => (q ? fold(stripPdf(d.name) + " " + (d.folder || "")).includes(q) : (d.folder || "") === cwd));
   const by = {
     recent: (a, b) => b.modified - a.modified,
     old: (a, b) => a.modified - b.modified,
@@ -95,26 +98,16 @@ $("docSearch").addEventListener("input", () => { clearTimeout(searchTimer); sear
 
 // ---------- L'accueil ----------
 async function renderHome() {
-  const res = await fetch("/api/docs");
-  if (!res.ok) return;
-  docs = await res.json();
-  fillFolders();
-  const has = docs.length > 0;
-  $("homeEmpty").hidden = has;
-  $("library").hidden = !has;
+  const [r1, r2] = await Promise.all([fetch("/api/docs"), fetch("/api/folders")]);
+  if (!r1.ok) return;
+  docs = await r1.json();
+  folders = r2.ok ? await r2.json() : [];
+  if (cwd && !folders.some((f) => f.path === cwd)) cwd = ""; // dossier supprimé ou renommé ailleurs
+  $("homeEmpty").hidden = docs.length > 0;
+  $("library").hidden = false;
   renderResume();
   renderGrid();
 }
-
-function fillFolders() { // liste des dossiers (créés par DeepWell) : le filtre n'apparaît que s'il y en a
-  const sel = $("docFolder"), cur = sel.value;
-  const names = [...new Set(docs.map((d) => d.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
-  sel.replaceChildren(Object.assign(document.createElement("option"), { value: "", textContent: "Tous les dossiers" }),
-    ...names.map((n) => Object.assign(document.createElement("option"), { value: n, textContent: n })));
-  sel.value = names.includes(cur) ? cur : "";
-  sel.hidden = names.length === 0;
-}
-$("docFolder").addEventListener("change", renderGrid);
 
 function renderResume() { // le document sur lequel vous avez travaillé en dernier
   const last = [...docs].sort((a, b) => b.modified - a.modified)[0];
@@ -130,17 +123,145 @@ function renderResume() { // le document sur lequel vous avez travaillé en dern
   $("resumeImg").src = `/api/docs/${enc(last.name)}/thumb?v=${Math.round(last.modified)}`;
 }
 
+function visibleFolders() {
+  const q = fold($("docSearch").value.trim());
+  return folders.filter((f) => (q ? fold(f.name).includes(q) : f.parent === cwd)).sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+}
+
+function goFolder(path) { cwd = path; $("docSearch").value = ""; setRoute(null); renderGrid(); window.scrollTo?.({ top: 0 }); }
+
+function renderCrumbs() { // Accueil › Scolaire › 2026-2027 : chaque étape est cliquable et accepte un document ou un dossier lâché dessus
+  const nav = $("crumbs"), parts = cwd ? cwd.split("/") : [];
+  nav.replaceChildren();
+  nav.hidden = !parts.length;
+  const add = (label, path, last) => {
+    const b = el("button", "crumb" + (last ? " here" : ""));
+    b.type = "button"; b.textContent = label;
+    if (!last) { b.addEventListener("click", () => goFolder(path)); dropTarget(b, path); }
+    nav.appendChild(b);
+    if (!last) nav.appendChild(Object.assign(el("span", "sep"), { textContent: "›" }));
+  };
+  add("Accueil", "", false);
+  parts.forEach((p, i) => add(p, parts.slice(0, i + 1).join("/"), i === parts.length - 1));
+}
+
 function renderGrid() {
-  const list = visibleDocs();
+  const list = visibleDocs(), subs = visibleFolders(), searching = $("docSearch").value.trim() !== "";
   grid.replaceChildren();
+  subs.forEach((f) => grid.appendChild(buildFolder(f, searching)));
   list.forEach((d) => grid.appendChild(buildCard(d)));
-  $("noMatch").hidden = list.length > 0 || docs.length === 0;
-  $("docCount").textContent = docs.length ? `· ${list.length === docs.length ? docs.length : `${list.length} sur ${docs.length}`}` : "";
+  renderCrumbs();
+  $("noMatch").hidden = list.length > 0 || subs.length > 0 || (!searching && !cwd);
+  $("noMatch").textContent = searching ? "Rien ne correspond à votre recherche." : "Ce dossier est vide. Glissez un PDF ici, ou utilisez « Ouvrir un PDF ».";
+  $("docCount").textContent = searching ? `· ${list.length + subs.length} résultat(s)` : cwd ? `· ${cwd.split("/").pop()}` : docs.length ? `· ${docs.length}` : "";
+}
+$("newFolder").addEventListener("click", async () => {
+  const name = prompt(cwd ? `Nom du nouveau dossier (dans « ${cwd.split("/").pop()} ») :` : "Nom du nouveau dossier :");
+  if (!name || !name.trim()) return;
+  const r = await fetch("/api/folders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parent: cwd, name: name.trim() }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { fail(d.error || "Création impossible"); return; }
+  notify("Dossier créé ✓", "ok", 1800);
+  renderHome();
+});
+
+// ---------- Glisser-déposer (souris) : un document ou un dossier lâché sur un dossier ou sur le fil d'Ariane y est rangé. Au doigt : menu « Déplacer vers… ». ----------
+function dropTarget(node, path) {
+  node.addEventListener("dragover", (e) => { if ([...e.dataTransfer.types].some((t) => t === "text/pdm-doc" || t === "text/pdm-folder")) { e.preventDefault(); node.classList.add("drop-over"); } });
+  node.addEventListener("dragleave", () => node.classList.remove("drop-over"));
+  node.addEventListener("drop", async (e) => {
+    node.classList.remove("drop-over");
+    const doc = e.dataTransfer.getData("text/pdm-doc"), fol = e.dataTransfer.getData("text/pdm-folder");
+    if (!doc && !fol) return;
+    e.preventDefault(); e.stopPropagation();
+    if (doc) await moveDoc(doc, path); else await moveFolder(fol, path);
+  });
+}
+async function moveDoc(name, to) {
+  const r = await fetch(`/api/docs/${enc(name)}/move`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folder: to }) });
+  if (!r.ok) { fail((await r.json().catch(() => ({}))).error || "Déplacement impossible"); return; }
+  notify("Document déplacé ✓", "ok", 1800);
+  renderHome();
+}
+async function moveFolder(path, to) {
+  const r = await fetch("/api/folders/move", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, to }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { fail(d.error || "Déplacement impossible"); return; }
+  if (cwd === path || cwd.startsWith(path + "/")) cwd = d.path + cwd.slice(path.length);
+  notify("Dossier déplacé ✓", "ok", 1800);
+  renderHome();
+}
+function pickFolder(title, exclude) { // fenêtre « Déplacer vers… » : liste des dossiers en arborescence ; renvoie le chemin choisi, "" = Accueil, null = annulé
+  return new Promise((resolve) => {
+    const dlg = $("pickDlg"), list = $("pickList");
+    $("pickTitle").textContent = title;
+    list.replaceChildren();
+    const row = (label, path, depth) => {
+      const b = el("button", "pick-row"); b.type = "button"; b.style.paddingLeft = `${12 + depth * 18}px`;
+      b.append(svgIcon("folder"), Object.assign(document.createElement("span"), { textContent: label }));
+      b.addEventListener("click", () => { dlg.close(); resolve(path); });
+      list.appendChild(b);
+    };
+    row("Accueil", "", 0);
+    folders.filter((f) => !exclude || !(f.path === exclude || f.path.startsWith(exclude + "/")))
+      .sort((a, b) => a.path.localeCompare(b.path, "fr", { sensitivity: "base" })).forEach((f) => row(f.name, f.path, f.path.split("/").length));
+    $("pickCancel").onclick = () => { dlg.close(); resolve(null); };
+    dlg.addEventListener("close", () => resolve(null), { once: true });
+    dlg.showModal();
+  });
+}
+
+function buildFolder(f, searching) {
+  const card = el("div", "card foldercard");
+  card.draggable = true;
+  card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/pdm-folder", f.path); e.dataTransfer.effectAllowed = "move"; });
+  dropTarget(card, f.path);
+  const main = el("button", "cardmain");
+  main.setAttribute("aria-label", `Ouvrir le dossier ${f.name}`);
+  const tw = el("div", "thumbwrap foldertile");
+  tw.appendChild(svgIcon("folder", "ic xl"));
+  const ct = el("div", "ct"); ct.textContent = f.name; ct.title = f.path;
+  const cs = el("div", "cs"); cs.textContent = f.items ? plural(f.items, "élément", "éléments") : "Vide";
+  main.append(tw, ct, cs);
+  if (searching && f.parent) { const cf = el("div", "cs cfolder"); cf.textContent = "📁 " + f.parent; main.append(cf); }
+  main.addEventListener("click", () => goFolder(f.path));
+  const mb = el("button", "tool menu-btn");
+  mb.title = "Actions"; mb.setAttribute("aria-label", `Actions pour le dossier ${f.name}`); mb.setAttribute("aria-haspopup", "menu");
+  mb.appendChild(svgIcon("more"));
+  const menu = el("div", "cardmenu"); menu.hidden = true; menu.setAttribute("role", "menu");
+  const item = (icon, label, cls, fn) => {
+    const b = el("button", "mi " + cls); b.setAttribute("role", "menuitem"); b.append(svgIcon(icon), label);
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); closeCardMenus(); fn(); }); menu.appendChild(b);
+  };
+  item("folder", "Ouvrir", "", () => goFolder(f.path));
+  item("pencil", "Renommer", "", async () => {
+    const want = prompt("Nouveau nom du dossier :", f.name);
+    if (want === null || !want.trim() || want.trim() === f.name) return;
+    const r = await fetch("/api/folders/rename", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: f.path, newName: want.trim() }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { fail(d.error || "Renommage impossible"); return; }
+    if (cwd === f.path || cwd.startsWith(f.path + "/")) cwd = d.path + cwd.slice(f.path.length);
+    renderHome();
+  });
+  item("folder", "Déplacer vers…", "", async () => { const to = await pickFolder(`Déplacer « ${f.name} » vers`, f.path); if (to !== null) await moveFolder(f.path, to); });
+  item("trash", "Supprimer le dossier", "danger", async () => {
+    if (!confirm(`Supprimer le dossier « ${f.name} » ?\n\nSes documents et sous-dossiers ne sont PAS supprimés : ils remontent d'un niveau.`)) return;
+    const r = await fetch("/api/folders/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: f.path }) });
+    if (!r.ok) { fail("Suppression impossible"); return; }
+    if (cwd === f.path || cwd.startsWith(f.path + "/")) cwd = f.parent;
+    notify("Dossier supprimé (contenu conservé)", "ok", 2500);
+    renderHome();
+  });
+  mb.addEventListener("click", (ev) => { ev.stopPropagation(); const open = menu.hidden; closeCardMenus(); menu.hidden = !open; card.classList.toggle("menu-open", open); });
+  card.append(main, mb, menu);
+  return card;
 }
 
 function buildCard(d) {
   const title = stripPdf(d.name);
   const card = el("div", "card");
+  card.draggable = true;
+  card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/pdm-doc", d.name); e.dataTransfer.effectAllowed = "move"; });
 
   const main = el("button", "cardmain");
   main.setAttribute("aria-label", `Ouvrir ${title}`);
@@ -157,7 +278,7 @@ function buildCard(d) {
   const cd = el("div", "cs"); cd.textContent = `Modifié · ${when(d.modified)}`; cd.title = whenLong(d.modified);
   const cp = el("div", "cs"); cp.textContent = d.pages ? plural(d.pages, "page", "pages") : "PDF";
   main.append(tw, ct);
-  if (d.folder) { const cf = el("div", "cs cfolder"); cf.textContent = "📁 " + d.folder; cf.title = d.folder; main.append(cf); }
+  if (d.folder && $("docSearch").value.trim()) { const cf = el("div", "cs cfolder"); cf.textContent = "📁 " + d.folder; cf.title = d.folder; main.append(cf); }
   main.append(cd, cp);
   main.addEventListener("click", () => openDoc(d.name));
 
@@ -175,6 +296,7 @@ function buildCard(d) {
   };
   item("folder", "Ouvrir", "", () => openDoc(d.name));
   item("pencil", "Renommer", "", () => renameFromHome(d));
+  item("folder", "Déplacer vers…", "", async () => { const to = await pickFolder(`Déplacer « ${title} » vers`); if (to !== null) await moveDoc(d.name, to); });
   item("download", "Télécharger le PDF", "", () => downloadFromHome(d));
   if (d.draft) item("undo", "Revenir à l'original", "", () => resetFromHome(d));
   item("trash", "Supprimer", "danger", () => deleteFromHome(d));

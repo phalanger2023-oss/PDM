@@ -8,6 +8,19 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.3.0", "date": "2026-11-22",
+        "nouveautes": [
+            "Accueil en dossiers, façon écran d'accueil : des dossiers et des documents côte à côte, des dossiers dans des dossiers, autant que tu veux. Bouton « Nouveau dossier », fil d'Ariane cliquable pour remonter.",
+            "Ranger : glisse un document ou un dossier sur un dossier (ou sur le fil d'Ariane), ou utilise le menu ⋯ → « Déplacer vers… » (idéal au doigt). Les dossiers se renomment, se déplacent et se suppriment : supprimer un dossier ne supprime jamais son contenu, il remonte d'un niveau.",
+            "Un dossier « Scolaire » existe d'office : DeepWell y range les cours (Scolaire / année / matière / chapitre). Les documents déjà déposés par DeepWell y sont rangés automatiquement.",
+            "Un PDF ouvert depuis l'accueil arrive dans le dossier que tu regardes. Les dossiers vides restent affichés.",
+        ],
+        "ameliorations": [
+            "La recherche de l'accueil cherche dans tous les dossiers (documents et dossiers) ; le filtre « Tous les dossiers » est remplacé par la navigation.",
+        ],
+        "corrections": [],
+    },
+    {
         "version": "1.2.0", "date": "2026-11-22",
         "nouveautes": [
             "Dossiers : les documents déposés par DeepWell sont rangés par dossier (année / matière / chapitre). Un filtre « Tous les dossiers » apparaît sur l'accueil, le dossier est affiché sur chaque carte et la recherche en tient compte.",

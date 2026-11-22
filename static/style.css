@@ -476,3 +476,21 @@ details.rel > summary { cursor: pointer; display: flex; align-items: baseline; g
 .linkbox summary { cursor: pointer; font-weight: 600; }
 .linkrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
 .linkrow input { flex: 1 1 260px; min-width: 0; font-family: monospace; }
+
+/* Accueil en dossiers : dossiers et documents côte à côte, comme un écran d'accueil */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: -4px 0 16px; font-size: 14px; }
+.crumbs[hidden] { display: none; }
+.crumb { border: 0; background: none; color: var(--accent); font: inherit; padding: 4px 8px; border-radius: 8px; cursor: pointer; }
+.crumb:hover { background: var(--surface); }
+.crumb.here { color: var(--text); font-weight: 600; cursor: default; }
+.crumbs .sep { color: var(--muted); }
+.drop-over { outline: 2px dashed var(--accent); outline-offset: 2px; background: var(--surface); }
+.foldertile { display: flex; align-items: center; justify-content: center; background: var(--surface); }
+.foldertile .ic.xl { width: 64px; height: 64px; color: var(--accent); stroke-width: 1.4; }
+.foldercard .ct { text-align: center; }
+.pick-dlg { width: min(420px, 92vw); }
+.pick-list { max-height: 50vh; overflow: auto; margin: 10px 0; display: flex; flex-direction: column; gap: 2px; }
+.pick-row { display: flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--text); font: inherit; padding: 9px 12px; border-radius: 8px; cursor: pointer; text-align: left; }
+.pick-row:hover { background: var(--surface); }
+.pick-row .ic { width: 18px; height: 18px; flex: none; }
+.pick-actions { display: flex; justify-content: flex-end; }

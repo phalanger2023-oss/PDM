@@ -119,6 +119,76 @@ def write_dossiers(d):
     tmp.replace(DOSSIERS)
 
 
+# ---- Arborescence : dossiers imbriqués, façon écran d'accueil. Un dossier = un chemin « A/B/C » ; les dossiers vides sont notés dans .arbo.json.
+ARBO = DOCS / ".arbo.json"
+ROOT_SCOLAIRE = "Scolaire"  # dossier où DeepWell range les cours (année / matière / chapitre)
+
+
+def norm_path(s):
+    parts = [re.sub(r"\s+", " ", x).strip()[:80] for x in re.split(r"[/\\]", str(s or ""))]
+    return "/".join(x for x in parts if x and x not in (".", ".."))[:300]
+
+
+def read_arbo():
+    try:
+        d = json.loads(ARBO.read_text(encoding="utf-8"))
+        return sorted({norm_path(x) for x in d.get("folders", []) if norm_path(x)}) if isinstance(d, dict) else []
+    except (OSError, ValueError):
+        return []
+
+
+def write_arbo(folders):
+    tmp = ARBO.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"folders": sorted(set(folders))}, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(ARBO)
+
+
+def remember(path):
+    """Un dossier qui contient (ou contenait) des documents reste affiché même vide : on le note."""
+    path = norm_path(path)
+    if path and path not in read_arbo():
+        write_arbo(read_arbo() + [path])
+
+
+def ancestors(path):
+    parts = path.split("/") if path else []
+    return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
+
+
+def all_folders():
+    """Tous les dossiers : ceux créés à la main, leurs parents, et ceux où se trouve au moins un document."""
+    out = set()
+    for f in read_arbo():
+        out.update(ancestors(f))
+    for info in read_dossiers().values():
+        out.update(ancestors(norm_path(info.get("dossier", ""))))
+    return out
+
+
+def rewrite_paths(fn):
+    """Applique fn(chemin) -> nouveau chemin (ou None pour retirer) aux dossiers notés et au dossier de chaque document."""
+    write_arbo([n for n in (fn(f) for f in read_arbo()) if n])
+    m = read_dossiers()
+    for info in m.values():
+        if "dossier" in info:
+            info["dossier"] = fn(norm_path(info["dossier"])) or ""
+    write_dossiers(m)
+
+
+def migrate_dossiers():
+    """Une fois au démarrage : séparateurs « / » uniformes, documents de DeepWell sous « Scolaire », le dossier « Scolaire » existe."""
+    m = read_dossiers()
+    for info in m.values():
+        d = norm_path(info.get("dossier", ""))
+        if str(info.get("source", "")).startswith("deepwell:") and d and d.split("/")[0] != ROOT_SCOLAIRE:
+            d = f"{ROOT_SCOLAIRE}/{d}"
+        info["dossier"] = d
+        remember(d)
+    write_dossiers(m)
+    if ROOT_SCOLAIRE not in read_arbo():
+        write_arbo(read_arbo() + [ROOT_SCOLAIRE])
+
+
 def integration_key(new=False):
     """La clé d'intégration (créée au premier besoin). Elle ne sert qu'à DeepWell, jamais à se connecter au site."""
     if new or not CLE_FILE.exists():
@@ -489,7 +559,7 @@ def list_docs():
         except Exception:
             pass
         items.append({"name": p.name, "size": st.st_size, "modified": modified, "draft": draft, "pages": pages,
-                      "folder": (meta.get(p.name) or {}).get("dossier", "")})
+                      "folder": norm_path((meta.get(p.name) or {}).get("dossier", ""))})
     items.sort(key=lambda i: i["modified"], reverse=True)
     if CACHE.exists():  # ménage : miniatures de documents qui n'existent plus (recalculables, donc sans risque)
         known = {i["name"][:-4] for i in items}
@@ -500,6 +570,104 @@ def list_docs():
                 except OSError:
                     pass
     return jsonify(items[:1000])
+
+
+def _folder_item(path, docs_by_folder, folders):
+    sub = [f for f in folders if "/" in f and f.rsplit("/", 1)[0] == path]
+    return {"path": path, "name": path.rsplit("/", 1)[-1], "parent": path.rsplit("/", 1)[0] if "/" in path else "",
+            "items": len(sub) + docs_by_folder.get(path, 0)}
+
+
+@app.get("/api/folders")
+def list_folders():
+    """Tous les dossiers (avec le nombre d'éléments directs) : l'accueil affiche ceux du dossier courant."""
+    folders = sorted(all_folders(), key=lambda x: x.lower())
+    count = {}
+    for info in read_dossiers().values():
+        d = norm_path(info.get("dossier", ""))
+        count[d] = count.get(d, 0) + 1
+    return jsonify([_folder_item(f, count, folders) for f in folders])
+
+
+def _folder_args():
+    b = request.get_json(silent=True) or {}
+    return b, norm_path(b.get("path"))
+
+
+@app.post("/api/folders")
+def folder_create():
+    """Crée un dossier : « parent » (facultatif) + « name »."""
+    b = request.get_json(silent=True) or {}
+    name = norm_path(b.get("name"))
+    if not name or "/" in name:
+        return jsonify(error="Donnez un nom au dossier (sans « / »)."), 400
+    path = norm_path(f"{norm_path(b.get('parent'))}/{name}")
+    if path in all_folders():
+        return jsonify(error=f"Le dossier « {name} » existe déjà ici."), 409
+    write_arbo(read_arbo() + [path])
+    return jsonify(ok=True, path=path)
+
+
+@app.post("/api/folders/rename")
+def folder_rename():
+    b, path = _folder_args()
+    name = norm_path(b.get("newName"))
+    if path not in all_folders() or not name or "/" in name:
+        return jsonify(error="Dossier introuvable ou nom invalide."), 400
+    new = norm_path(f"{path.rsplit('/', 1)[0] if '/' in path else ''}/{name}")
+    if new == path:
+        return jsonify(ok=True, path=path)
+    if new in all_folders():
+        return jsonify(error=f"Le dossier « {name} » existe déjà ici."), 409
+    rewrite_paths(lambda f: new + f[len(path):] if f == path or f.startswith(path + "/") else f)
+    return jsonify(ok=True, path=new)
+
+
+@app.post("/api/folders/move")
+def folder_move():
+    """Déplace un dossier (avec tout son contenu) dans « to » ('' = l'accueil)."""
+    b, path = _folder_args()
+    to = norm_path(b.get("to"))
+    if path not in all_folders() or (to and to not in all_folders()):
+        return jsonify(error="Dossier introuvable."), 404
+    if to == path or to.startswith(path + "/"):
+        return jsonify(error="Un dossier ne peut pas être déplacé dans lui-même."), 400
+    new = norm_path(f"{to}/{path.rsplit('/', 1)[-1]}")
+    if new == path:
+        return jsonify(ok=True, path=path)
+    if new in all_folders():
+        return jsonify(error="Un dossier du même nom existe déjà à cet endroit."), 409
+    rewrite_paths(lambda f: new + f[len(path):] if f == path or f.startswith(path + "/") else f)
+    return jsonify(ok=True, path=new)
+
+
+@app.post("/api/folders/delete")
+def folder_delete():
+    """Supprime le dossier SEUL : ses documents et sous-dossiers remontent dans le dossier parent (rien n'est perdu)."""
+    b, path = _folder_args()
+    if path not in all_folders():
+        return jsonify(error="Dossier introuvable."), 404
+    parent = path.rsplit("/", 1)[0] if "/" in path else ""
+    def fn(f):
+        if f == path:
+            return parent or None
+        return norm_path(f"{parent}/{f[len(path) + 1:]}") if f.startswith(path + "/") else f
+    rewrite_paths(fn)
+    return jsonify(ok=True)
+
+
+@app.post("/api/docs/<name>/move")
+def doc_move(name):
+    p = doc_file(name)
+    if not p.exists():
+        return jsonify(error="Document introuvable"), 404
+    to = norm_path((request.get_json(silent=True) or {}).get("folder"))
+    m = read_dossiers()
+    remember(m.get(p.name, {}).get("dossier", ""))
+    m.setdefault(p.name, {})["dossier"] = to
+    write_dossiers(m)
+    remember(to)
+    return jsonify(ok=True, folder=to)
 
 
 @app.post("/api/docs")
@@ -515,6 +683,12 @@ def add_doc():
         return jsonify(error="Ce fichier n'est pas un PDF valide"), 400
     name = unique_name(f.filename or "document.pdf")
     (DOCS / name).write_bytes(data)
+    where = norm_path(request.form.get("folder"))  # le document arrive dans le dossier ouvert à l'écran
+    if where:
+        m = read_dossiers()
+        m[name] = {**m.get(name, {}), "dossier": where}
+        write_dossiers(m)
+        remember(where)
     return jsonify(name=name, **info)
 
 
@@ -717,7 +891,9 @@ def doc_delete(name):
         except OSError:
             pass
     m = read_dossiers()
-    if m.pop(p.name, None) is not None:
+    old = m.pop(p.name, None)
+    if old is not None:
+        remember(old.get("dossier", ""))
         write_dossiers(m)
     return jsonify(ok=True)
 
@@ -746,14 +922,16 @@ def integration_add_doc():
     pour ne jamais créer de doublon si la demande est rejouée). Renvoie le nom du document dans PDM."""
     f = request.files.get("file")
     source = str(request.form.get("source") or "")[:200]
-    folder = " / ".join(x.strip() for x in re.split(r"[/\\]", request.form.get("folder") or "") if x.strip())[:300]
+    folder = norm_path(request.form.get("folder"))
+    if folder.split("/")[0] != ROOT_SCOLAIRE:
+        folder = norm_path(f"{ROOT_SCOLAIRE}/{folder}")
     if f is None:
         return jsonify(error="Aucun fichier reçu"), 400
     m = read_dossiers()
     if source:
         for name, info in m.items():
             if info.get("source") == source and (DOCS / name).exists():
-                return jsonify(name=name, folder=info.get("dossier", ""), existing=True)
+                return jsonify(name=name, folder=norm_path(info.get("dossier", "")), existing=True)
     data = f.read()
     try:
         annotations_json(data)
@@ -763,7 +941,11 @@ def integration_add_doc():
     (DOCS / name).write_bytes(data)
     m[name] = {"dossier": folder, "source": source}
     write_dossiers(m)
+    remember(folder)
     return jsonify(name=name, folder=folder, existing=False)
+
+
+migrate_dossiers()
 
 
 if __name__ == "__main__":
