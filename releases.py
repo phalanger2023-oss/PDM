@@ -15,7 +15,9 @@ RELEASES = [
             "Exporter : PDF, Word (.docx), ou « Créer un PDF à annoter dans PDM » (le PDF arrive dans le même dossier ; le document texte reste modifiable).",
             "Importer un fichier Word (.docx) depuis l'accueil pour le modifier ici.",
         ],
-        "ameliorations": [],
+        "ameliorations": [
+            "Performances : les fichiers du site (scripts, styles, PDF.js) sont compressés et mis en cache ; l'accueil ne rouvre plus chaque PDF pour compter ses pages (mémorisé tant que le fichier ne change pas) ; serveur réglé pour plus de stabilité (recyclage périodique des processus).",
+        ],
         "corrections": [],
     },
     {

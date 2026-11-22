@@ -8,6 +8,7 @@ Le serveur Python fait quatre choses :
 """
 import hashlib
 import hmac
+import gzip
 import io
 import json
 import os
@@ -231,6 +232,43 @@ def require_login():
     if p.startswith("/api/"):
         return jsonify(error="Connexion requise"), 401
     return redirect("/login")
+
+# ---------- Compression et cache des fichiers du site ----------
+_GZ = {}  # (chemin, date, taille) -> version compressée des fichiers statiques (JS/CSS/HTML), calculée une seule fois
+_GZ_TYPES = ("text/", "application/javascript", "application/json", "image/svg+xml")
+
+
+@app.after_request
+def compress_and_cache(resp):
+    p = request.path
+    if p.startswith("/static/vendor/") and resp.status_code == 200:
+        resp.headers["Cache-Control"] = "public, max-age=86400"  # PDF.js (version figée dans l'image) : 1 jour sans revalider
+    if (resp.status_code != 200 or request.method != "GET" or resp.headers.get("Content-Encoding")
+            or "gzip" not in request.headers.get("Accept-Encoding", "") or not (resp.mimetype or "").startswith(_GZ_TYPES)
+            or "attachment" in resp.headers.get("Content-Disposition", "")):
+        return resp
+    static = p.startswith("/static/") or p in ("/", "/login")
+    try:
+        resp.direct_passthrough = False
+        body = resp.get_data()
+    except Exception:
+        return resp
+    if len(body) < 1024:
+        return resp
+    key = (p, len(body), hash(body)) if static else None
+    z = _GZ.get(key) if key else None
+    if z is None:
+        z = gzip.compress(body, compresslevel=9 if static else 5, mtime=0)
+        if key:
+            if len(_GZ) >= 60:
+                _GZ.pop(next(iter(_GZ)))
+            _GZ[key] = z
+    resp.set_data(z)
+    resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["Content-Length"] = str(len(z))
+    resp.vary.add("Accept-Encoding")
+    return resp
+
 
 # Types d'annotations gérés par ce site (les autres, par exemple les liens, ne sont jamais touchés)
 MANAGED = [
@@ -541,6 +579,27 @@ def healthz():
     return jsonify(status="ok" if ok else "erreur"), (200 if ok else 503)
 
 
+_PAGES = {}  # (nom) -> (taille, date de modif, nombre de pages) : évite de rouvrir chaque PDF à chaque affichage de l'accueil
+
+
+def _page_count(p, st):
+    key = (st.st_size, st.st_mtime_ns)
+    hit = _PAGES.get(p.name)
+    if hit and hit[0] == key:
+        return hit[1]
+    n = 0
+    try:
+        d = pymupdf.open(p)
+        n = d.page_count
+        d.close()
+    except Exception:
+        return 0  # illisible : on ne mémorise pas (il pourra être réparé)
+    _PAGES[p.name] = (key, n)
+    if len(_PAGES) > 5000:
+        _PAGES.pop(next(iter(_PAGES)))
+    return n
+
+
 @app.get("/api/docs")
 def list_docs():
     """Les PDF de Mes documents, du plus récemment travaillé au plus ancien (page d'accueil)."""
@@ -552,13 +611,7 @@ def list_docs():
         pf = project_file(p.name)
         if pf.exists():
             draft, modified = True, max(modified, pf.stat().st_mtime)
-        pages = 0
-        try:
-            d = pymupdf.open(p)
-            pages = d.page_count
-            d.close()
-        except Exception:
-            pass
+        pages = _page_count(p, st)
         items.append({"name": p.name, "size": st.st_size, "modified": modified, "draft": draft, "pages": pages,
                       "folder": norm_path((meta.get(p.name) or {}).get("dossier", ""))})
     for p in DOCS.glob("*.pdmdoc"):  # documents texte (façon Word)
