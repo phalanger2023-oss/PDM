@@ -4,7 +4,7 @@ Ce site suit la **même architecture que `recettes-app`** : un projet Docker Com
 (réseau `traefik-public`), avec un certificat HTTPS Let's Encrypt automatique. Il n'a pas besoin de base de
 données : ses documents sont gardés dans un volume Docker (`annotateur_pdf_documents`).
 
-Adresse prévue : **https://pdf.louisharicuisine.com** (modifiable dans `.env`).
+Adresse prévue : **https://pdm.louisharicuisine.com** (modifiable dans `.env`).
 
 ## Comment la connexion fonctionne
 
@@ -43,7 +43,7 @@ Ce sont des secrets : ne les envoyez à personne.
 
 ## Étape 2 — Ajouter l'adresse dans le DNS
 
-Chez votre gestionnaire de domaine, créez pour `pdf.louisharicuisine.com` le **même enregistrement** que
+Chez votre gestionnaire de domaine, créez pour `pdm.louisharicuisine.com` le **même enregistrement** que
 celui de `dev.louisharicuisine.com` (type A, vers l'adresse IP de votre serveur). Si vous avez déjà un
 enregistrement « joker » (`*.louisharicuisine.com`), il n'y a rien à faire.
 
@@ -95,7 +95,7 @@ docker compose ps
 ```
 
 Le service `pdf` doit passer à l'état **healthy** après quelques secondes. Puis ouvrez
-https://pdf.louisharicuisine.com : la page de connexion s'affiche. Connectez-vous en laissant « Rester connecté »
+https://pdm.louisharicuisine.com : la page de connexion s'affiche. Connectez-vous en laissant « Rester connecté »
 coché, fermez le navigateur, rouvrez le site : vous devez arriver directement sur vos documents.
 Le certificat HTTPS peut mettre une minute à apparaître la toute première fois.
 
