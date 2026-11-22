@@ -578,6 +578,7 @@ function parasToHtml(paras) {
     if (pi) html += "<br>";
     for (const r of p) {
       let t = escHtml(r.t);
+      if (r.c && /^#[0-9a-fA-F]{6}$/.test(r.c)) t = `<span style="color:${r.c}">${t}</span>`; // couleur propre à ce morceau (lue dans le PDF)
       if (r.b) t = `<b>${t}</b>`;
       if (r.i) t = `<i>${t}</i>`;
       if (r.u) t = `<u>${t}</u>`;
@@ -598,8 +599,9 @@ function readParas(ed) {
     if (needNl) { nl(); needNl = false; }
     const run = { t };
     for (const k of ["b", "i", "u", "s"]) if (f[k]) run[k] = 1;
+    if (f.c) run.c = f.c;
     const cur = paras[paras.length - 1], prev = cur[cur.length - 1];
-    if (prev && ["b", "i", "u", "s"].every((k) => (prev[k] || 0) === (run[k] || 0))) prev.t += t;
+    if (prev && ["b", "i", "u", "s"].every((k) => (prev[k] || 0) === (run[k] || 0)) && (prev.c || "") === (run.c || "")) prev.t += t;
     else cur.push(run);
     started = true; lastBr = false;
   };
@@ -620,6 +622,7 @@ function readParas(ed) {
         if (tag === "I" || tag === "EM" || cs.fontStyle === "italic") f.i = 1;
         if (tag === "U" || td.includes("underline")) f.u = 1;
         if (tag === "S" || tag === "STRIKE" || tag === "DEL" || td.includes("line-through")) f.s = 1;
+        if (n.style && n.style.color) { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(cs.color); if (m) f.c = "#" + [m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, "0")).join(""); }
         const block = tag === "DIV" || tag === "P";
         if (block && started) needNl = true;
         walk(n, f);
@@ -852,6 +855,11 @@ function syncControls(s) {
 function applyStyle(patch) {
   if (selected && selected.native) { // paragraphe du PDF : on ne touche pas aux réglages des futures zones
     Object.assign(selected, patch);
+    if (patch.color && selected.paras) { // choisir une couleur pour tout le paragraphe efface les couleurs propres à certains morceaux
+      selected.paras.forEach((p) => p.forEach((r) => { delete r.c; }));
+      const bx = boxEls.get(selected), ed = bx && bx.querySelector(".ed");
+      if (ed) { ed.querySelectorAll("span[style]").forEach((sp) => { sp.style.removeProperty("color"); }); bx._base = JSON.stringify(readParas(ed)); }
+    }
     selected.changed = true;
     styleBox(selected); markDirty(); updateSelectionButtons(); syncControls(selected);
     return;

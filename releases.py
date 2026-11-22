@@ -16,6 +16,7 @@ RELEASES = [
             "Importer un fichier Word (.docx) depuis l'accueil pour le modifier ici.",
         ],
         "ameliorations": [
+            "Modifier un texte natif du PDF : la couleur propre à un mot (mot en rouge dans un texte noir) est conservée, et la police d'origine du PDF est réutilisée quand elle contient toutes les lettres du texte (même rendu qu'à l'origine). Si une lettre manque dans la police (les PDF n'embarquent que les lettres utilisées), la police standard la plus proche est utilisée pour tout le style, sans mélange dans une même ligne.",
             "Performances : les fichiers du site (scripts, styles, PDF.js) sont compressés et mis en cache ; l'accueil ne rouvre plus chaque PDF pour compter ses pages (mémorisé tant que le fichier ne change pas) ; serveur réglé pour plus de stabilité (recyclage périodique des processus).",
         ],
         "corrections": [],

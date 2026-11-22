@@ -8,6 +8,8 @@ Format du texte riche (le même côté navigateur et côté Python) :
   paras = liste de paragraphes ; un paragraphe = liste de "runs"
   run   = {"t": "texte", "b": 1, "i": 1, "u": 1, "s": 1}   (b, i, u, s facultatifs)
 """
+import io
+import os
 import re
 import statistics
 
@@ -43,6 +45,8 @@ class Spec:
         self.name = tag if buf else key
 
     def length(self, text, size):
+        if self.buf and " " in text and not self.font.has_glyph(32):  # police réduite aux lettres utilisées : pas d'espace dans le fichier
+            return self.font.text_length(text.replace(" ", ""), fontsize=size) + 0.26 * size * text.count(" ")
         return self.font.text_length(text, fontsize=size)
 
     def has(self, text):
@@ -145,12 +149,12 @@ def place(lines, width, size, lh, align, base0):
                 merged.append({"t": text, "run": run, "sp": sp, "w": wl})
         for m in merged:
             if m["t"].strip():
-                items.append(("t", x, y, m["t"], m["sp"], size))
+                items.append(("t", x, y, m["t"], m["sp"], size, m["run"].get("c")))
             th = max(0.5, size * 0.06)
             if m["run"].get("u"):
-                items.append(("l", x, y + 0.13 * size, x + m["w"], y + 0.13 * size, th))
+                items.append(("l", x, y + 0.13 * size, x + m["w"], y + 0.13 * size, th, m["run"].get("c")))
             if m["run"].get("s"):
-                items.append(("l", x, y - 0.30 * size, x + m["w"], y - 0.30 * size, th))
+                items.append(("l", x, y - 0.30 * size, x + m["w"], y - 0.30 * size, th, m["run"].get("c")))
             x += m["w"]
     return items
 
@@ -159,6 +163,13 @@ def place(lines, width, size, lh, align, base0):
 def _esc(text):
     b = text.encode("cp1252", "replace")
     return b.replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
+
+
+def _rgb_str(hexcolor):
+    if not isinstance(hexcolor, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", hexcolor):
+        return None
+    r, g, b = hex_to_rgb(hexcolor)
+    return f"{r:.3f} {g:.3f} {b:.3f}"
 
 
 def ap_stream(items, W, H, color, fill, border_w, pad):
@@ -172,13 +183,14 @@ def ap_stream(items, W, H, color, fill, border_w, pad):
     out.append(f"{border_w:.2f} {border_w:.2f} {W - 2 * border_w:.3f} {H - 2 * border_w:.3f} re W n".encode())
     used = set()
     for it in items:
+        rc = _rgb_str(it[-1]) or col  # couleur propre au morceau de texte, sinon celle de la zone
         if it[0] == "t":
-            _, x, y, text, sp, size = it
+            _, x, y, text, sp, size, _c = it
             used.add(sp.key)
-            out.append(f"BT /F{sp.key} {size:.2f} Tf {col} rg {x + pad:.2f} {H - y:.2f} Td (".encode() + _esc(text) + b") Tj ET")
+            out.append(f"BT /F{sp.key} {size:.2f} Tf {rc} rg {x + pad:.2f} {H - y:.2f} Td (".encode() + _esc(text) + b") Tj ET")
         else:
-            _, x1, y1, x2, y2, th = it
-            out.append(f"{th:.2f} w {col} RG {x1 + pad:.2f} {H - y1:.2f} m {x2 + pad:.2f} {H - y2:.2f} l S".encode())
+            _, x1, y1, x2, y2, th, _c = it
+            out.append(f"{th:.2f} w {rc} RG {x1 + pad:.2f} {H - y1:.2f} m {x2 + pad:.2f} {H - y2:.2f} l S".encode())
     out.append(b"Q")
     return b"\n".join(out), used
 
@@ -286,7 +298,7 @@ def family_of(span, is_type3):
 def _merge(runs):
     out = []
     for r in runs:
-        if out and all(out[-1].get(k) == r.get(k) for k in ("b", "i")):
+        if out and all(out[-1].get(k) == r.get(k) for k in ("b", "i", "c")):
             out[-1]["t"] += r["t"]
         else:
             out.append(dict(r))
@@ -308,6 +320,7 @@ def read_blocks(page):
         x0, y0, x1, y1 = b["bbox"]
         bw = max(x1 - x0, 1)
         dom = max(spans, key=lambda s: len(s["text"].strip()))
+        block_color = "#%06x" % dom["color"]
         locked, reason = False, ""
         for s in spans:
             if MATH_FONT.match(s["font"]) or not all(_char_ok(c) for c in fix_text(s["text"])):
@@ -338,7 +351,9 @@ def read_blocks(page):
                     # grand écart entre deux morceaux (numéro puis titre, tabulation...) : on le garde avec des espaces
                     runs.append({"t": " " * min(40, max(2, round(gap / (max(s["size"], 1) * 0.28)))),
                                  **({"b": 1} if is_bold(s) else {}), **({"i": 1} if is_italic(s) else {})})
-                runs.append({"t": fix_text(s["text"]), **({"b": 1} if is_bold(s) else {}), **({"i": 1} if is_italic(s) else {})})
+                col = "#%06x" % s["color"]
+                runs.append({"t": fix_text(s["text"]), **({"b": 1} if is_bold(s) else {}), **({"i": 1} if is_italic(s) else {}),
+                             **({"c": col} if col != block_color else {})})  # couleur propre à ce morceau (mot en rouge dans un texte noir…)
                 prev = s
             cur.extend(runs)
             last = li == len(vlines) - 1
@@ -464,6 +479,47 @@ def image_png(doc, xref):
 
 
 # ---------------------------------------------------------------- contenu natif : écriture
+def _trace_maps(page, rect):
+    """Pour chaque style (gras, italique) de la zone : {code Unicode: numéro de glyphe} lu dans le PDF lui-même."""
+    maps = {}
+    try:
+        trace = page.get_texttrace()
+    except Exception:
+        return maps
+    for sp in trace:
+        if not pymupdf.Rect(sp["bbox"]).intersects(rect):
+            continue
+        st = {"flags": sp.get("flags", 0), "font": sp.get("font", "")}
+        m = maps.setdefault((is_bold(st), is_italic(st)), {})
+        for ch in sp["chars"]:
+            if 0 < ch[0] <= 0xFFFF and ch[1] >= 0:
+                m[ch[0]] = ch[1]
+    return maps
+
+
+def _with_cmap(buf, charmap):
+    """Police réduite d'un PDF (souvent codée par numéros de glyphes, sans table Unicode) + table Unicode reconstruite à partir du texte
+    existant : elle devient utilisable pour réécrire du texte avec les mêmes lettres. Renvoie None si ce n'est pas possible."""
+    from fontTools.ttLib import TTFont, newTable
+    from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
+    f = TTFont(io.BytesIO(buf))
+    order = f.getGlyphOrder()
+    cm = dict(f.getBestCmap() or {}) if "cmap" in f else {}
+    for u, g in charmap.items():
+        if g < len(order):
+            cm[u] = order[g]
+    if not cm:
+        return None
+    st = CmapSubtable.newSubtable(4)
+    st.platformID, st.platEncID, st.language, st.cmap = 3, 1, 0, cm
+    cmap = newTable("cmap")
+    cmap.tableVersion, cmap.tables = 0, [st]
+    f["cmap"] = cmap
+    out = io.BytesIO()
+    f.save(out)
+    return out.getvalue()
+
+
 def collect_embedded(doc, page, rect):
     """Polices réellement intégrées dans le PDF et utilisées dans cette zone : {(gras, italique): octets}."""
     d = page.get_text("dict", clip=rect, flags=TEXT_FLAGS)
@@ -502,6 +558,49 @@ def collect_embedded(doc, page, rect):
             continue
         if buf and len(buf) < 2_500_000:  # une police entière alourdirait trop le fichier
             out[key] = bytes(buf)
+    if out:
+        maps = _trace_maps(page, rect)
+        for key in list(out):
+            cm = maps.get(key)
+            try:
+                probe = pymupdf.Font(fontbuffer=out[key])
+                if cm and not all(probe.has_glyph(u) for u in cm):
+                    patched = _with_cmap(out[key], cm)
+                    if patched and all(pymupdf.Font(fontbuffer=patched).has_glyph(u) for u in cm):
+                        out[key] = patched
+                    else:
+                        del out[key]
+                elif not cm and not probe.has_glyph(ord("e")):
+                    del out[key]
+            except Exception:
+                out.pop(key, None)
+    return out
+
+
+def _run_color(rc, default):
+    if isinstance(rc, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", rc):
+        return hex_to_rgb(rc)
+    return default
+
+
+def _consistent_fonts(embedded, paras):
+    """Garde une police d'origine seulement si elle a TOUTES les lettres du texte de ce style (gras / italique) :
+    sinon une même ligne mélangerait deux polices différentes ; on prend alors la police standard pour ce style."""
+    if not embedded:
+        return embedded
+    need = {}
+    for p in paras:
+        for r in p:
+            key = (bool(r.get("b")), bool(r.get("i")))
+            need[key] = need.get(key, "") + r.get("t", "")
+    out = {}
+    for key, buf in embedded.items():
+        try:
+            f = pymupdf.Font(fontbuffer=buf)
+        except Exception:
+            continue
+        if all(c.isspace() or f.has_glyph(ord(c)) for c in need.get(key, "")):
+            out[key] = buf
     return out
 
 
@@ -513,6 +612,7 @@ def write_block(page, n, embedded, report):
     paras = normalize_paras(n)
     report["blocks"] = report.get("blocks", 0) + 1
     tag = f"EF{report['blocks']}_"
+    embedded = _consistent_fonts(embedded, paras)
     resolve = make_resolver(family, embedded, tag)
     # Un bloc qui n'avait qu'une ligne (titre, numéro + titre...) ne passe jamais à la ligne : la police de
     # remplacement est souvent un peu plus large, et le texte déborderait sinon sur une 2e ligne.
@@ -523,15 +623,15 @@ def write_block(page, n, embedded, report):
     used_original = False
     for it in items:
         if it[0] == "t":
-            _, x, y, text, sp, sz = it
+            _, x, y, text, sp, sz, rc = it
             if sp.buf and sp.name not in inserted:
                 page.insert_font(fontname=sp.name, fontbuffer=sp.buf)
                 inserted.add(sp.name)
             used_original = used_original or bool(sp.buf)
-            page.insert_text((rect.x0 + x, rect.y0 + y), text, fontname=sp.name, fontsize=sz, color=color)
+            page.insert_text((rect.x0 + x, rect.y0 + y), text, fontname=sp.name, fontsize=sz, color=_run_color(rc, color))
         else:
-            _, x1, y1, x2, y2, th = it
-            page.draw_line((rect.x0 + x1, rect.y0 + y1), (rect.x0 + x2, rect.y0 + y2), color=color, width=th)
+            _, x1, y1, x2, y2, th, rc = it
+            page.draw_line((rect.x0 + x1, rect.y0 + y1), (rect.x0 + x2, rect.y0 + y2), color=_run_color(rc, color), width=th)
     if used_original:
         report["original_font"] = report.get("original_font", 0) + 1
 
@@ -641,8 +741,18 @@ def apply_native(doc, natives, nimages):
                 except Exception:
                     report["errors"] = report.get("errors", 0) + 1
         # 2. Polices : on utilise toujours la police standard la plus proche (Helvetica, Times, Courier).
-        #    La réutilisation des polices d'origine (collect_embedded) est désactivée à votre demande.
-        prepared = [(n, {}) for n in items["t"]]
+        #    Polices : on réutilise celles du PDF quand elles contiennent toutes les lettres du texte (même rendu qu'à l'origine) ;
+        #    sinon (police absente ou réduite aux lettres déjà utilisées) la standard la plus proche. PDM_ORIGINAL_FONTS=0 désactive.
+        use_orig = os.environ.get("PDM_ORIGINAL_FONTS", "1") != "0"
+        prepared = []
+        for n in items["t"]:
+            emb = {}
+            if use_orig and not n.get("deleted"):
+                try:
+                    emb = collect_embedded(doc, page, pymupdf.Rect(n["orig"]))
+                except Exception:
+                    emb = {}
+            prepared.append((n, emb))
         # 3. on efface le texte d'origine
         for n in items["t"]:
             r = pymupdf.Rect(n["orig"])
