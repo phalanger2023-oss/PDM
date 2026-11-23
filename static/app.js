@@ -1979,7 +1979,7 @@ document.addEventListener("paste", (e) => {
 });
 
 // Bouton « Se déconnecter » : visible seulement si le site demande une connexion
-fetch("/api/me").then((r) => r.json()).then((m) => { $("logout").hidden = !(m.auth && m.logged); document.querySelector(".menu-title.menu-account").hidden = $("logout").hidden; }).catch(() => {});
+fetch("/api/me").then((r) => r.json()).then((m) => { $("logout").hidden = !(m.auth && m.logged && !m.sso); document.querySelector(".menu-title.menu-account").hidden = $("logout").hidden; }).catch(() => {});
 $("logout").addEventListener("click", async () => {
   if (!(await leaveCurrentDoc())) return; // le brouillon est enregistré avant de se déconnecter
   await _fetch("/api/logout", { method: "POST" });

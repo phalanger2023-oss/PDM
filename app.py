@@ -6,6 +6,7 @@ Le serveur Python fait quatre choses :
   3. relire les annotations déjà présentes dans un PDF
   4. écrire vos annotations (surlignages, notes, zones de texte, formes) dans le PDF
 """
+import base64
 import hashlib
 import hmac
 import gzip
@@ -17,10 +18,10 @@ import secrets
 import time
 from datetime import timedelta
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import pymupdf  # PyMuPDF : la bibliothèque qui lit et modifie les PDF
-from flask import Flask, Response, abort, jsonify, redirect, request, send_file, send_from_directory, session
+from flask import Flask, Response, abort, g, has_request_context, jsonify, redirect, request, send_file, send_from_directory, session
 
 import pdfedit as pe
 import textdocs
@@ -32,15 +33,42 @@ BASE = Path(__file__).parent
 #   ENVIRONMENT   "production" sur le serveur (désactive le mode debug)
 #   BEHIND_PROXY  "1" derrière Traefik : l'adresse et le https réels viennent des en-têtes du proxy
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
-DOCS = Path(os.environ.get("DOCS_DIR") or BASE / "Mes documents")  # vos PDF de travail
-DOCS.mkdir(parents=True, exist_ok=True)
+ROOT_DOCS = Path(os.environ.get("DOCS_DIR") or BASE / "Mes documents")  # dossier racine des documents (espace du premier administrateur + fichiers communs)
+ROOT_DOCS.mkdir(parents=True, exist_ok=True)
+
+
+class _UserDir:
+    """Chemin qui pointe vers l'espace de la personne connectée (chaque compte DeepWell a le sien) ; hors requête : le dossier racine.
+    Se comporte comme un Path (on peut faire DOCS / "x.pdf", DOCS.glob(...), etc.)."""
+    def __init__(self, sub=""):
+        self.sub = sub
+
+    def _p(self):
+        base = g.get("docs_dir") if has_request_context() else None
+        base = base or ROOT_DOCS
+        return base / self.sub if self.sub else base
+
+    def __getattr__(self, name):
+        return getattr(self._p(), name)
+
+    def __truediv__(self, other):
+        return self._p() / other
+
+    def __fspath__(self):
+        return os.fspath(self._p())
+
+    def __str__(self):
+        return str(self._p())
+
+
+DOCS = _UserDir()
 # Le PDF d'origine n'est JAMAIS modifié. Votre travail en cours est un « brouillon » enregistré à part,
 # automatiquement ; le PDF final n'est fabriqué que quand vous le téléchargez.
-PROJECTS = DOCS / ".brouillons"  # un fichier .json par document (vos modifications en cours)
-CACHE = DOCS / ".cache"          # miniatures de la page d'accueil (recalculables à tout moment)
+PROJECTS = _UserDir(".brouillons")  # un fichier .json par document (vos modifications en cours)
+CACHE = _UserDir(".cache")          # miniatures de la page d'accueil (recalculables à tout moment)
 
-DOSSIERS = DOCS / ".dossiers.json"          # nom du document -> {"dossier": "année/matière/chapitre", "source": "deepwell:…"}
-CLE_FILE = DOCS / ".cle_integration"        # clé secrète qui autorise DeepWell à déposer des documents (voir plus bas)
+DOSSIERS = _UserDir(".dossiers.json")          # nom du document -> {"dossier": "année/matière/chapitre", "source": "deepwell:…"}
+CLE_FILE = ROOT_DOCS / ".cle_integration"        # clé secrète qui autorise DeepWell à déposer des documents (voir plus bas)
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 Mo maximum
@@ -103,8 +131,59 @@ def _password_ok(password):
         return False
 
 
+SSO_DAYS = 3  # une connexion venue de DeepWell est revérifiée (un aller-retour invisible si DeepWell est toujours connecté) au bout de ce délai
+
+
+def _dw_session():
+    """Les infos du compte DeepWell connecté (id, nom, rôle), si la session vient de DeepWell et n'est pas trop ancienne."""
+    d = session.get("dw")
+    if isinstance(d, dict) and d.get("id") and time.time() - float(session.get("dwt", 0)) < SSO_DAYS * 86400:
+        return d
+    return None
+
+
 def _logged_in():
-    return session.get("u") == AUTH_USER and session.get("v") == PW_VERSION
+    return (session.get("u") == AUTH_USER and session.get("v") == PW_VERSION) or bool(_dw_session())
+
+
+# ---- Espaces : chaque compte DeepWell a ses propres documents. Le premier administrateur qui se connecte reprend les documents
+# déjà présents (dossier racine) ; ensuite chaque compte a son dossier .espaces/<identifiant>. La connexion locale de secours = espace racine.
+OWNER_FILE = ROOT_DOCS / ".proprio"
+LINK_FILE = ROOT_DOCS / ".deepwell_url"
+
+
+def space_for(uid, role):
+    uid = re.sub(r"[^A-Za-z0-9_-]", "", str(uid or ""))[:80]
+    if not uid:
+        return ROOT_DOCS
+    try:
+        owner = OWNER_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        owner = ""
+    if not owner and role == "admin":
+        OWNER_FILE.write_text(uid, encoding="utf-8")
+        owner = uid
+    if uid == owner:
+        return ROOT_DOCS
+    d = ROOT_DOCS / ".espaces" / uid
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def deepwell_url():
+    """Adresse de DeepWell (communiquée par DeepWell lui-même, avec la clé d'intégration) ; vide = connexion locale seulement."""
+    try:
+        u = LINK_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return u if re.match(r"^https?://[^\s/]+$", u) else ""
+
+
+@app.before_request
+def pick_space():
+    d = _dw_session()
+    if d:
+        g.docs_dir = space_for(d["id"], d.get("role"))
 
 
 def read_dossiers():
@@ -122,7 +201,7 @@ def write_dossiers(d):
 
 
 # ---- Arborescence : dossiers imbriqués, façon écran d'accueil. Un dossier = un chemin « A/B/C » ; les dossiers vides sont notés dans .arbo.json.
-ARBO = DOCS / ".arbo.json"
+ARBO = _UserDir(".arbo.json")
 ROOT_SCOLAIRE = "Scolaire"  # dossier où DeepWell range les cours (année / matière / chapitre)
 
 
@@ -223,9 +302,9 @@ def require_login():
         if origin and urlparse(origin).netloc != request.host:
             abort(403)
     p = request.path
-    if p in ("/api/integration/ping", "/api/integration/docs", "/api/integration/logo"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
+    if p in ("/api/integration/ping", "/api/integration/docs", "/api/integration/logo", "/api/integration/link"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
         return None if _key_ok(request.remote_addr or "?") else (jsonify(error="Clé d'intégration refusée"), 401)
-    if p in ("/login", "/api/login", "/api/me", "/healthz") or p.startswith("/static/"):
+    if p in ("/login", "/api/login", "/api/me", "/healthz", "/sso/callback") or p.startswith("/static/"):
         return None
     if _logged_in():
         return None
@@ -564,7 +643,50 @@ def home():
 def login_page():
     if AUTH_ENABLED and _logged_in():
         return redirect("/")
+    dw = deepwell_url()
+    if dw and request.args.get("local") != "1":  # compte unique : on se connecte sur DeepWell, qui renvoie ici (/login?local=1 = connexion de secours)
+        return redirect(f"{dw}/?pdm_return={quote(request.url_root, safe='')}")
     return send_from_directory("static", "login.html")
+
+
+def _b64u(b):
+    return base64.urlsafe_b64encode(b).decode().rstrip("=")
+
+
+@app.get("/sso/callback")
+def sso_callback():
+    """Retour de DeepWell : jeton signé (clé d'intégration), valable une minute, utilisable une seule fois."""
+    ip = request.remote_addr or "?"
+    bad = (jsonify(error="Connexion refusée"), 401)
+    if _too_many_fails(ip):
+        return bad
+    try:
+        body, sig = request.args.get("token", "").split(".")
+        good = _b64u(hmac.new(integration_key().encode(), body.encode(), hashlib.sha256).digest())
+        if not hmac.compare_digest(sig.encode(), good.encode()):
+            raise ValueError
+        data = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+        now = time.time()
+        if float(data["exp"]) < now or str(data["jti"]) in _SSO_SEEN:
+            raise ValueError
+        _SSO_SEEN[str(data["jti"])] = now
+        for k in [k for k, t in _SSO_SEEN.items() if now - t > 300]:
+            _SSO_SEEN.pop(k, None)
+        uid = re.sub(r"[^A-Za-z0-9_-]", "", str(data["uid"]))
+        if not uid:
+            raise ValueError
+    except Exception:
+        _FAILS.setdefault(ip, []).append(time.time())
+        return bad
+    session.clear()
+    session["dw"] = {"id": uid, "name": str(data.get("name") or "")[:80], "role": "admin" if data.get("role") == "admin" else "user"}
+    session["dwt"] = time.time()
+    session.permanent = True
+    nxt = request.args.get("next", "/")
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/")
+
+
+_SSO_SEEN = {}  # identifiants de jetons déjà utilisés
 
 
 @app.post("/api/login")
@@ -596,7 +718,8 @@ def api_logout():
 
 @app.get("/api/me")
 def api_me():
-    return jsonify(auth=AUTH_ENABLED, logged=(not AUTH_ENABLED) or _logged_in(), days=SESSION_DAYS)
+    d = _dw_session()
+    return jsonify(auth=AUTH_ENABLED, logged=(not AUTH_ENABLED) or _logged_in(), days=SESSION_DAYS, sso=bool(d), name=(d or {}).get("name", ""))
 
 
 @app.get("/api/releases")
@@ -616,7 +739,7 @@ _PAGES = {}  # (nom) -> (taille, date de modif, nombre de pages) : évite de rou
 
 def _page_count(p, st):
     key = (st.st_size, st.st_mtime_ns)
-    hit = _PAGES.get(p.name)
+    hit = _PAGES.get(str(p))
     if hit and hit[0] == key:
         return hit[1]
     n = 0
@@ -626,7 +749,7 @@ def _page_count(p, st):
         d.close()
     except Exception:
         return 0  # illisible : on ne mémorise pas (il pourra être réparé)
-    _PAGES[p.name] = (key, n)
+    _PAGES[str(p)] = (key, n)
     if len(_PAGES) > 5000:
         _PAGES.pop(next(iter(_PAGES)))
     return n
@@ -1162,6 +1285,16 @@ def integration_key_renew():
     return jsonify(key=integration_key(new=True))
 
 
+@app.post("/api/integration/link")
+def integration_link():
+    """DeepWell dit où il se trouve : c'est la seule adresse vers laquelle PDM renvoie pour se connecter."""
+    u = str((request.get_json(silent=True) or {}).get("deepwell_url") or "").strip().rstrip("/")
+    if not re.match(r"^https?://[^\s/]+$", u):
+        return jsonify(error="Adresse invalide"), 400
+    LINK_FILE.write_text(u, encoding="utf-8")
+    return jsonify(ok=True)
+
+
 @app.get("/api/integration/ping")
 def integration_ping():
     return jsonify(ok=True, app="PDM", version=VERSION)
@@ -1171,6 +1304,8 @@ def integration_ping():
 def integration_add_doc():
     """DeepWell dépose un PDF de cours : champs « file », « folder » (année/matière/chapitre) et « source » (identifiant côté DeepWell,
     pour ne jamais créer de doublon si la demande est rejouée). Renvoie le nom du document dans PDM."""
+    if request.form.get("user_id"):  # le document va dans l'espace de la personne qui l'a demandé dans DeepWell
+        g.docs_dir = space_for(request.form.get("user_id"), request.form.get("user_role"))
     f = request.files.get("file")
     source = str(request.form.get("source") or "")[:200]
     folder = norm_path(request.form.get("folder"))
@@ -1196,7 +1331,7 @@ def integration_add_doc():
     return jsonify(name=name, folder=folder, existing=False)
 
 
-LOGO_FILE = DOCS / ".logo_deepwell.svg"       # logo choisi dans DeepWell (fond de l'accueil) ; absent = logo de base
+LOGO_FILE = ROOT_DOCS / ".logo_deepwell.svg"       # logo choisi dans DeepWell (fond de l'accueil) ; absent = logo de base
 
 
 @app.post("/api/integration/logo")

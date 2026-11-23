@@ -10,6 +10,7 @@ RELEASES = [
     {
         "version": "1.5.0", "date": "2026-11-23",
         "nouveautes": [
+            "Compte unique avec DeepWell : on se connecte une seule fois sur DeepWell ; en ouvrant PDM sans être connecté, tu es renvoyé vers DeepWell puis ramené ici, connecté. Chaque compte DeepWell a son propre espace de documents (tes documents actuels restent chez l'administrateur). La connexion propre à PDM reste en secours sur /login?local=1.",
             "Zone de texte façon Canva : elle grandit toute seule quand tu écris (Entrée ajoute une ligne), la barre sur chaque côté règle la largeur du texte, la poignée du haut agrandit ou réduit le texte, et le correcteur orthographique ne s'active que dans la zone sélectionnée. Une zone vide qu'on quitte disparaît.",
             "Interligne réglable (zones de texte et paragraphes du PDF), et 7 nouvelles polices intégrées au PDF final (Calibri-like, Cambria-like, Cardo, Crimson, DejaVu, Comic Relief, Anton) : ce que tu vois à l'écran est ce qui est écrit dans le PDF.",
             "Calques : « premier plan / avancer / reculer / arrière-plan » pour les zones de texte et les formes, respectés dans le PDF enregistré (un texte peut maintenant passer sous une forme).",
