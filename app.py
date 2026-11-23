@@ -279,10 +279,10 @@ MANAGED = [
 # La mise en page est rangée dans chaque annotation sous cette étiquette, pour la retrouver
 # exactement quand on rouvre le PDF.
 TAG = "annotpdf:"
-FONTS = {"helv", "tiro", "cour"}  # sans empattement, serif, machine à écrire
+FONTS = {"helv", "tiro", "cour"} | set(pe.CUSTOM)  # sans empattement, serif, machine à écrire + polices livrées avec le site
 BOX_SHAPES = {"rect", "ellipse", "triangle"}
 SHAPES = BOX_SHAPES | {"line", "arrow"}
-DEFAULT_TEXT = {"font": "helv", "size": 14, "color": "#000000", "align": 0, "fill": None, "border": False}
+DEFAULT_TEXT = {"font": "helv", "size": 14, "color": "#000000", "align": 0, "fill": None, "border": False, "lh": 1.2}
 DEFAULT_HL = "#ffe000"
 RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
@@ -367,9 +367,11 @@ def meta_of(a):
 # ---------- Lire les annotations d'un PDF ----------
 def read_annotations(doc):
     highlights, notes, textboxes, shapes = [], [], [], []
+    zc = 0  # rang d'empilement : l'ordre des annotations dans le PDF (la dernière est au-dessus)
     for page in doc:
         n = page.number + 1
         for a in page.annots(types=MANAGED):
+            zc += 1
             kind = a.type[1]
             meta = meta_of(a)
             if kind == "Highlight":
@@ -390,7 +392,7 @@ def read_annotations(doc):
                     r = pymupdf.Rect(r.x0 + 0.5, r.y0 + 0.5, r.x1 - 0.5, r.y1 - 0.5)
                 paras = (meta or {}).get("paras") or pe.normalize_paras({"text": a.info.get("content", "")})
                 textboxes.append({"page": n, "x0": r.x0, "y0": r.y0, "x1": r.x1, "y1": r.y1,
-                                  "paras": paras, **style})
+                                  "paras": paras, "z": zc, **style})
             else:  # Square, Circle, Line, Polygon
                 if kind == "Polygon" and not (meta and meta.get("kind") == "triangle"):
                     continue  # un polygone venu d'ailleurs : on n'y touche pas
@@ -412,7 +414,7 @@ def read_annotations(doc):
                 x0, y0, x1, y1 = s["rect"]
                 shapes.append({"page": n, "kind": s["kind"], "x0": x0, "y0": y0, "x1": x1, "y1": y1,
                                "stroke": s.get("stroke", "#e03131"), "width": s.get("width", 2),
-                               "fill": s.get("fill")})
+                               "fill": s.get("fill"), "z": zc})
     return highlights, notes, textboxes, shapes
 
 
@@ -487,7 +489,23 @@ def annotate(pdf_bytes, payload):
         if page is not None:
             page.add_text_annot(pymupdf.Point(n["x"], n["y"]), n.get("text", ""))
 
-    for t in payload.get("textboxes", []):
+    # Textes et formes dans un seul ordre d'empilement (champ « z » : le plus grand est au-dessus ;
+    # sans « z », l'ordre reçu est conservé, formes au-dessus des textes comme avant).
+    stack = [("t", t) for t in payload.get("textboxes", [])] + [("s", s) for s in payload.get("shapes", [])]
+
+    def zkey(entry):
+        try:
+            return float(entry[1].get("z"))
+        except (TypeError, ValueError):
+            return float("inf") if entry[0] == "s" else float("-inf")  # pas de z : ancien comportement
+    stack.sort(key=zkey)  # tri stable
+
+    for kind, t in stack:
+        if kind == "s":
+            page = page_of(t)
+            if page is not None:
+                add_shape(page, t)
+            continue
         page = page_of(t)
         paras = pe.normalize_paras(t)
         if page is None or not pe.plain_text(paras).strip():
@@ -499,15 +517,11 @@ def annotate(pdf_bytes, payload):
             "align": t.get("align") if t.get("align") in (0, 1, 2) else 0,
             "fill": safe_hex(t.get("fill"), None),
             "border": bool(t.get("border")),
+            "lh": min(max(float(t.get("lh", 1.2)), 0.8), 3.0),
         }
         rect = pymupdf.Rect(t["x0"], t["y0"], t["x1"], t["y1"])
         a = pe.write_text_annot(doc, page, rect, paras, style, ctx)
-        a.set_info(subject=TAG + json.dumps({**style, "rect": list(rect), "paras": paras}))
-
-    for s in payload.get("shapes", []):
-        page = page_of(s)
-        if page is not None:
-            add_shape(page, s)
+        a.set_info(subject=TAG + json.dumps({**style, "rect": list(a.rect), "paras": paras}))
 
     pe.finalize_aps(doc, ctx)  # en dernier : voir la remarque dans pdfedit.write_text_annot
     out = doc.tobytes(garbage=1, deflate=True)

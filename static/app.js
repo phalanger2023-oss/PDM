@@ -460,7 +460,7 @@ async function renderPages(initial = false) {
 
 function setZoom(v) {
   SCALE = v; prefs.zoom = v; savePrefs();
-  renderPages();
+  return renderPages();
 }
 $("zoomIn").addEventListener("click", () => { const v = ZOOM_STEPS.find((z) => z > SCALE + 0.01); if (v) setZoom(v); });
 $("zoomOut").addEventListener("click", () => { const v = [...ZOOM_STEPS].reverse().find((z) => z < SCALE - 0.01); if (v) setZoom(v); });
@@ -658,15 +658,45 @@ document.addEventListener("selectionchange", () => {
 });
 
 // ====================== 6. Zones de texte (annotations) ======================
-const defaults = { font: "helv", size: 14, color: "#000000", align: 0, fill: null, border: false };
+const defaults = { font: "helv", size: 14, color: "#000000", align: 0, fill: null, border: false, lh: 1.2 };
 const FONT_CSS = {
   helv: "Helvetica, Arial, sans-serif",
   tiro: '"Times New Roman", Times, serif',
   cour: '"Courier New", Courier, monospace',
+  carl: 'Carlito, Calibri, sans-serif', cala: 'Caladea, Cambria, serif', card: 'Cardo, Georgia, serif',
+  crim: '"Crimson Text", Georgia, serif', deja: '"DejaVu Sans", Verdana, sans-serif',
+  comi: '"Comic Relief", "Comic Sans MS", cursive', anto: 'Anton, Impact, sans-serif',
 };
 const ALIGN_CSS = ["left", "center", "right"];
 const boxEls = new Map(); // zone de texte (ou paragraphe natif) -> son élément HTML
 let selected = null;      // zone de texte (ou paragraphe natif) sélectionné
+
+// ---- Calques : « z » ordonne zones de texte et formes entre elles (le plus grand est au-dessus) ----
+function nextZ() { return Math.max(0, ...textboxes.map((t) => t.z || 0), ...shapes.map((t) => t.z || 0)) + 1; }
+function ensureZ() { // anciens brouillons : pas de z. Ordre d'avant : zones de texte puis formes
+  let z = Math.max(0, ...textboxes.map((t) => t.z || 0), ...shapes.map((t) => t.z || 0));
+  for (const it of [...textboxes, ...shapes]) if (!it.z) it.z = ++z;
+}
+function layerItem() { return selectedShape || (selected && !selected.native && textboxes.includes(selected) ? selected : null); }
+function moveLayer(how) {
+  const it = layerItem();
+  if (!it) return;
+  const same = [...textboxes, ...shapes].filter((x) => x.page === it.page).sort((a, b) => a.z - b.z);
+  const i = same.indexOf(it);
+  if (how === "front") it.z = nextZ();
+  else if (how === "back") it.z = Math.min(...same.map((x) => x.z)) - 1;
+  else {
+    const o = same[i + (how === "forward" ? 1 : -1)];
+    if (!o) return;
+    [it.z, o.z] = [o.z, it.z];
+  }
+  markDirty();
+  if (it === selectedShape) renderShapes(it.page - 1); else redraw();
+}
+document.querySelectorAll("[data-layer]").forEach((b) => {
+  b.addEventListener("mousedown", (e) => e.preventDefault());
+  b.addEventListener("click", () => moveLayer(b.dataset.layer));
+});
 
 // Créer : mode « Texte », puis cliquer-glisser pour tracer le rectangle.
 function startTextBox(ev, pageIndex) {
@@ -698,7 +728,7 @@ function startTextBox(ev, pageIndex) {
     if (d - a < 20 || f - c < 20) { d = a + 200 * SCALE; f = c + defaults.size * 2.4 * SCALE; }
     const tb = {
       page: pageIndex + 1, x0: a / SCALE, y0: c / SCALE, x1: d / SCALE, y1: f / SCALE,
-      paras: [[]], ...defaults,
+      paras: [[]], ...defaults, z: nextZ(),
     };
     textboxes.push(tb);
     selected = tb;
@@ -717,7 +747,7 @@ function buildBox(tb, idle = false) {
   // navigateur) le reconnaissent et peuvent y corriger le texte.
   const ed = el("div", "ed");
   ed.contentEditable = idle ? "false" : "true";
-  ed.spellcheck = true;
+  ed.spellcheck = false;   // le correcteur ne s'active que dans la zone sélectionnée (voir select)
   ed.lang = "fr";
   ed.setAttribute("role", "textbox");
   ed.setAttribute("aria-multiline", "true");
@@ -726,7 +756,15 @@ function buildBox(tb, idle = false) {
   box._base = JSON.stringify(readParas(ed));  // forme « normalisée » de départ : sert à détecter une vraie modification
   const grip = el("div", "tb-grip"); grip.textContent = "✥"; grip.title = "Déplacer";
   const rz = el("div", "tb-resize"); rz.title = "Redimensionner";
-  box.append(ed, grip, rz);
+  box.append(ed, grip);
+  let edgeL, edgeR, topH;
+  if (tb.native) box.append(rz);
+  else { // zone de texte : barres latérales = largeur du texte, poignée du haut = taille du texte
+    edgeL = el("div", "tb-edge l"); edgeL.title = "Largeur de la zone";
+    edgeR = el("div", "tb-edge r"); edgeR.title = "Largeur de la zone";
+    topH = el("div", "tb-top"); topH.title = "Glisser vers le haut / le bas : agrandir / réduire le texte";
+    box.append(edgeL, edgeR, topH);
+  }
   boxEls.set(tb, box);
   styleBox(tb);
 
@@ -747,11 +785,13 @@ function buildBox(tb, idle = false) {
       });
     });
     // Une extension peut modifier le texte sans frappe : on relit à chaque événement utile
-    ["input", "blur"].forEach((evn) => ed.addEventListener(evn, () => { syncBox(tb, box); updateCounters(); }));
+    ["input", "blur"].forEach((evn) => ed.addEventListener(evn, () => { syncBox(tb, box); fitBox(tb); updateCounters(); }));
     dragHandle(grip, tb, "move");
-    dragHandle(rz, tb, "resize");
+    if (tb.native) dragHandle(rz, tb, "resize");
+    else { dragHandle(edgeL, tb, "left"); dragHandle(edgeR, tb, "right"); dragHandle(topH, tb, "scale"); }
   }
   pages[tb.page - 1].tbLayer.appendChild(box);
+  fitBox(tb);
 }
 
 // Recopie le texte affiché dans le modèle, seulement s'il a vraiment changé
@@ -776,12 +816,13 @@ function styleBox(tb) {
   Object.assign(box.style, {
     left: tb.x0 * SCALE + "px", top: tb.y0 * SCALE + "px",
     width: (tb.x1 - tb.x0) * SCALE + "px",
-    height: nat ? "auto" : (tb.y1 - tb.y0) * SCALE + "px",
+    height: "auto",   // la zone grandit avec son texte (Entrée ajoute une ligne)
     minHeight: nat ? (tb.y1 - tb.y0) * SCALE + "px" : "",
     background: tb.fill || "transparent",
     border: tb.border ? `${SCALE}px solid ${tb.color}` : "none",
   });
-  const lh = nat ? tb.lh || 1.2 : 1.2;
+  const lh = tb.lh || 1.2;
+  if (!nat) box.style.zIndex = String(tb.z || 1);
   // Paragraphe natif : on place la 1re ligne de base comme dans le PDF d'origine
   const padTop = nat ? Math.max(0, (tb.base0 - tb.size * (lh / 2 + 0.3465)) * SCALE) : 2 * SCALE;
   Object.assign(box.querySelector(".ed").style, {
@@ -792,7 +833,17 @@ function styleBox(tb) {
     textAlign: ALIGN_CSS[tb.align] || "left",
     padding: nat ? `${padTop}px 0 0 0` : 2 * SCALE + "px",
   });
+  if (!nat) fitBox(tb);
 }
+
+// La hauteur d'une zone de texte = celle de son texte : on la relit après chaque changement
+function fitBox(tb) {
+  const box = boxEls.get(tb);
+  if (!box || tb.native) return;
+  const h = box.offsetHeight;
+  if (h > 0) tb.y1 = tb.y0 + h / SCALE;
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => boxEls.forEach((b, t) => fitBox(t)));
 
 // Déplacer (poignée ✥) ou redimensionner (poignée en bas à droite) à la souris
 function dragHandle(handle, tb, kind) {
@@ -801,11 +852,19 @@ function dragHandle(handle, tb, kind) {
     select(tb);
     handle.setPointerCapture(ev.pointerId);
     const sx = ev.clientX, sy = ev.clientY;
-    const o = { x0: tb.x0, y0: tb.y0, x1: tb.x1, y1: tb.y1 };
+    const o = { x0: tb.x0, y0: tb.y0, x1: tb.x1, y1: tb.y1, size: tb.size };
     const move = (e) => {
       const dx = (e.clientX - sx) / SCALE, dy = (e.clientY - sy) / SCALE;
       if (kind === "move") {
         tb.x0 = o.x0 + dx; tb.x1 = o.x1 + dx; tb.y0 = o.y0 + dy; tb.y1 = o.y1 + dy;
+      } else if (kind === "right") {
+        tb.x1 = Math.max(o.x1 + dx, o.x0 + 20);
+      } else if (kind === "left") {
+        tb.x0 = Math.min(o.x0 + dx, o.x1 - 20);
+      } else if (kind === "scale") { // glisser vers le haut : texte plus grand (même largeur de zone)
+        const h0 = Math.max(o.y1 - o.y0, 10);
+        tb.size = Math.round(Math.min(Math.max(o.size * (1 - dy / (h0 + 30)), 6), 200) * 2) / 2;
+        fSize.value = tb.size;
       } else {
         tb.x1 = Math.max(o.x1 + dx, o.x0 + 20); tb.y1 = Math.max(o.y1 + dy, o.y0 + 14);
       }
@@ -815,6 +874,7 @@ function dragHandle(handle, tb, kind) {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
       if (tb.native) tb.changed = true;
+      fitBox(tb);
       markDirty();
       updateSelectionButtons();
     };
@@ -825,10 +885,20 @@ function dragHandle(handle, tb, kind) {
 
 // Sélection d'une zone : la barre de mise en page reflète alors ses réglages
 function select(tb) {
+  const prev = selected;
+  if (prev && prev !== tb && !prev.native && textboxes.includes(prev) && !plainOf(prev.paras || []).trim()) {
+    textboxes = textboxes.filter((x) => x !== prev); // zone vide qu'on quitte : elle disparaît
+    const pe_ = boxEls.get(prev); if (pe_) { pe_.remove(); boxEls.delete(prev); }
+    markDirty();
+  }
   selected = tb;
   if (tb && selectedHl) selectHl(null);
   if (tb && selectedImage) { selectedImage = null; imgEls.forEach((b) => b.classList.remove("selected")); }
-  boxEls.forEach((box, t) => box.classList.toggle("selected", t === tb));
+  boxEls.forEach((box, t) => {
+    box.classList.toggle("selected", t === tb);
+    const ed = box.querySelector(".ed");
+    if (ed) ed.spellcheck = t === tb && !box.classList.contains("idle"); // correcteur : seulement la zone choisie
+  });
   updateSelectionButtons();
   syncControls(tb || defaults);
 }
@@ -841,11 +911,11 @@ function updateSelectionButtons() {
 
 // Barre de mise en page du texte
 const fFont = $("fFont"), fSize = $("fSize"), fColor = $("fColor");
-const fFillOn = $("fFillOn"), fFill = $("fFill"), fBorder = $("fBorder");
+const fFillOn = $("fFillOn"), fFill = $("fFill"), fBorder = $("fBorder"), fLh = $("fLh");
 const alignBtns = document.querySelectorAll("[data-align]");
 
 function syncControls(s) {
-  fFont.value = s.font; fSize.value = s.size; fColor.value = s.color;
+  fFont.value = s.font; fSize.value = s.size; fColor.value = s.color; fLh.value = s.lh || 1.2;
   fFillOn.setAttribute("aria-pressed", String(!!s.fill)); if (s.fill) fFill.value = s.fill;
   fBorder.setAttribute("aria-pressed", String(!!s.border));
   alignBtns.forEach((b) => b.classList.toggle("active", Number(b.dataset.align) === s.align));
@@ -872,6 +942,7 @@ const pressed = (b) => b.getAttribute("aria-pressed") === "true";
 fFont.addEventListener("change", () => applyStyle({ font: fFont.value }));
 fSize.addEventListener("input", () => applyStyle({ size: Math.min(Math.max(Number(fSize.value) || 14, 6), 120) }));
 fColor.addEventListener("input", () => applyStyle({ color: fColor.value }));
+fLh.addEventListener("input", () => { const v = Number(fLh.value); if (v >= 0.8 && v <= 3) applyStyle({ lh: Math.round(v * 100) / 100 }); });
 fFillOn.addEventListener("click", () => applyStyle({ fill: pressed(fFillOn) ? null : fFill.value }));
 fFill.addEventListener("input", () => applyStyle({ fill: fFill.value }));
 fBorder.addEventListener("click", () => applyStyle({ border: !pressed(fBorder) }));
@@ -1143,10 +1214,12 @@ function renderShapes(pi) {
   const p = pages[pi];
   if (!p) return;
   p.shapeSvg.replaceChildren();
+  p.tbLayer.querySelectorAll(":scope > .shape-layer").forEach((e) => e.remove());
   p.shUi.replaceChildren();
   for (const s of shapes) {
     if (s.page !== pi + 1) continue;
-    const g = sv("g");
+    const g = sv("svg", { class: "shape-layer" });
+    g.style.zIndex = String(s.z || 1);
     const vis = shapeGeom(s);
     vis.setAttribute("class", "vis");
     vis.setAttribute("stroke", s.stroke);
@@ -1170,7 +1243,7 @@ function renderShapes(pi) {
     hit.setAttribute("fill", isBoxKind(s.kind) && s.fill ? "rgba(0,0,0,0)" : "none");
     hit.addEventListener("pointerdown", (ev) => startShapeMove(ev, s));
     g.appendChild(hit);
-    p.shapeSvg.appendChild(g);
+    p.tbLayer.appendChild(g);
   }
   if (selectedShape && selectedShape.page === pi + 1 && shapes.includes(selectedShape)) drawShapeUi(selectedShape, p);
 }
@@ -1218,7 +1291,7 @@ function startShape(ev, pi) {
   const s = {
     page: pi + 1, kind: shapeDefaults.kind, x0: sx, y0: sy, x1: sx, y1: sy,
     stroke: shapeDefaults.stroke, width: shapeDefaults.width,
-    fill: isBoxKind(shapeDefaults.kind) ? shapeDefaults.fill : null,
+    fill: isBoxKind(shapeDefaults.kind) ? shapeDefaults.fill : null, z: nextZ(),
   };
   shapes.push(s);
   const move = (e) => { [s.x1, s.y1] = pt(e); renderShapes(pi); };
@@ -1331,6 +1404,7 @@ $("sDelete").addEventListener("click", deleteSelectedShape);
 // ====================== 9. Affichage de toutes les annotations ======================
 function redraw() {
   syncTextFromDom();
+  ensureZ();
   boxEls.clear();
   imgEls.clear();
   pages.forEach(({ hlLayer, tbLayer, noteLayer }) => {
@@ -1632,7 +1706,8 @@ function setProgress(n, total) {
 
 // ====================== 11. Fenêtres : réglages et aide ======================
 const settings = $("settings");
-function closePopovers() { settings.hidden = true; const h = $("help"); if (h) h.hidden = true; }
+function closePopovers() { settings.hidden = true; const h = $("help"); if (h) h.hidden = true; const m = $("more"); if (m) m.hidden = true; }
+$("moreBtn").addEventListener("click", () => { const open = $("more").hidden; closePopovers(); $("more").hidden = !open; });
 $("settingsBtn").addEventListener("click", () => { const open = settings.hidden; closePopovers(); settings.hidden = !open; });
 
 // ====================== 12. Modes, clavier, petits outils ======================
@@ -1655,6 +1730,67 @@ function applyMode() {
 function redrawQuiet() { const was = loading; loading = true; redraw(); loading = was; }
 document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener("change", applyMode));
 
+// ---- Copier / coller / dupliquer une zone de texte ou une forme ----
+let elClip = null; // { kind: "t" | "s", data }
+function copyElement() {
+  const it = layerItem();
+  if (!it) return false;
+  syncTextFromDom();
+  elClip = { kind: it === selectedShape ? "s" : "t", data: JSON.parse(JSON.stringify(it)) };
+  try { if (elClip.kind === "t") navigator.clipboard.writeText(plainOf(it.paras)); } catch (e) {}
+  notify("Élément copié", "ok", 1500);
+  return true;
+}
+function pasteElement(offset = 14) {
+  if (!elClip) return false;
+  const c = JSON.parse(JSON.stringify(elClip.data));
+  const cur = Math.min(Math.max(typeof curPage === "number" ? curPage : c.page, 1), pages.length);
+  const samePage = c.page === cur;
+  const dx = samePage ? offset : 0, dy = samePage ? offset : 0;
+  c.page = cur; c.x0 += dx; c.x1 += dx; c.y0 += dy; c.y1 += dy; c.z = nextZ();
+  if (elClip.kind === "t") { textboxes.push(c); markDirty(); selected = c; redraw(); }
+  else { shapes.push(c); markDirty(); renderShapes(cur - 1); setSelectedShape(c); }
+  elClip.data = JSON.parse(JSON.stringify(c)); // le collage suivant se décale encore
+  return true;
+}
+function duplicateElement() { if (!copyElement()) return false; return pasteElement(); }
+$("fCopy").addEventListener("click", copyElement);
+$("fPaste").addEventListener("click", () => pasteElement());
+$("fDup").addEventListener("click", duplicateElement);
+$("sCopy").addEventListener("click", copyElement);
+$("sPaste").addEventListener("click", () => pasteElement());
+$("sDup").addEventListener("click", duplicateElement);
+
+// ---- Zoom : pincement au doigt, pincement du pavé tactile (Ctrl + molette), Ctrl + molette ----
+let zoomTarget = null, zoomTimer = null;
+function zoomBy(factor) {
+  zoomTarget = clamp((zoomTarget || SCALE) * factor, 0.4, 4);
+  clearTimeout(zoomTimer);
+  zoomTimer = setTimeout(async () => {
+    const v = Math.round(zoomTarget * 100) / 100; zoomTarget = null;
+    if (Math.abs(v - SCALE) < 0.01) return;
+    const doc = document.documentElement, ratio = (window.scrollY + innerHeight / 2) / Math.max(doc.scrollHeight, 1);
+    await setZoom(v);
+    window.scrollTo(window.scrollX, ratio * doc.scrollHeight - innerHeight / 2);
+  }, 140);
+}
+window.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey || document.body.dataset.view !== "doc") return;
+  e.preventDefault(); // sinon le navigateur zoome toute la page
+  zoomBy(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.01)));
+}, { passive: false });
+let pinch = null;
+const tdist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+document.addEventListener("touchstart", (e) => { if (e.touches.length === 2 && document.body.dataset.view === "doc") pinch = tdist(e.touches); }, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!pinch || e.touches.length !== 2) return;
+  e.preventDefault();
+  const d = tdist(e.touches);
+  zoomBy(d / pinch);
+  pinch = d;
+}, { passive: false });
+document.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; }, { passive: true });
+
 // Clic ailleurs : on désélectionne et on ferme les fenêtres
 document.addEventListener("mousedown", (ev) => {
   const t = ev.target;
@@ -1676,12 +1812,15 @@ document.addEventListener("keydown", (e) => {
   else if (ctrl && e.key.toLowerCase() === "o") { e.preventDefault(); $("file").click(); }
   else if (ctrl && e.key.toLowerCase() === "z" && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (ctrl && e.key.toLowerCase() === "y" && !typing) { e.preventDefault(); redo(); }
+  else if (ctrl && e.key.toLowerCase() === "d" && layerItem()) { e.preventDefault(); duplicateElement(); }
+  else if (ctrl && e.key.toLowerCase() === "c" && layerItem() && (!typing || (activeEditor() && window.getSelection().isCollapsed))) { e.preventDefault(); copyElement(); }
+  else if (ctrl && e.key.toLowerCase() === "v" && elClip && !typing) { e.preventDefault(); pasteElement(); }
   else if (e.key === "Delete" && !typing) { selectedShape ? deleteSelectedShape() : selectedHl ? deleteSelectedHl() : deleteSelected(); }
   else if (e.key === "Escape") { closePopovers(); setSelectedShape(null); selectHl(null); }
 });
 
 // Bouton « Se déconnecter » : visible seulement si le site demande une connexion
-fetch("/api/me").then((r) => r.json()).then((m) => { $("logout").hidden = !(m.auth && m.logged); }).catch(() => {});
+fetch("/api/me").then((r) => r.json()).then((m) => { $("logout").hidden = !(m.auth && m.logged); document.querySelector(".menu-title.menu-account").hidden = $("logout").hidden; }).catch(() => {});
 $("logout").addEventListener("click", async () => {
   if (!(await leaveCurrentDoc())) return; // le brouillon est enregistré avant de se déconnecter
   await _fetch("/api/logout", { method: "POST" });

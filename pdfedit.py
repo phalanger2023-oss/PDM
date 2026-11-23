@@ -21,7 +21,23 @@ BASE14 = {
     "helv": ("helv", "hebo", "heit", "hebi"),
     "tiro": ("tiro", "tibo", "tiit", "tibi"),
     "cour": ("cour", "cobo", "coit", "cobi"),
+    **{k: tuple(f"{k}{i}" for i in range(4)) for k in ("carl", "cala", "card", "crim", "deja", "comi", "anto")},
 }
+# Polices libres (OFL) livrées avec le site : famille -> (nom affiché, CSS, fichiers normal/gras/italique/gras+italique)
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts")
+CUSTOM = {
+    "carl": ("Calibri-like (Carlito)", "Carlito", ("Carlito-Regular", "Carlito-Bold", "Carlito-Italic", "Carlito-BoldItalic")),
+    "cala": ("Cambria-like (Caladea)", "Caladea", ("Caladea-Regular", "Caladea-Bold", "Caladea-Italic", "Caladea-BoldItalic")),
+    "card": ("Cardo (livre)", "Cardo", ("Cardo-Regular", "Cardo-Bold", "Cardo-Italic", "Cardo-Italic")),
+    "crim": ("Crimson (élégant)", "Crimson Text", ("CrimsonText-Regular", "CrimsonText-Bold", "CrimsonText-Italic", "CrimsonText-BoldItalic")),
+    "deja": ("DejaVu Sans (large)", "DejaVu Sans", ("DejaVuSans", "DejaVuSans-Bold", "DejaVuSans-Oblique", "DejaVuSans-BoldOblique")),
+    "comi": ("Comic Relief (ludique)", "Comic Relief", ("ComicRelief-Regular", "ComicRelief-Bold", "ComicRelief-Regular", "ComicRelief-Bold")),
+    "anto": ("Anton (titre)", "Anton", ("Anton-Regular",) * 4),
+}
+CUSTOM_FILE = {}  # "carl0" -> chemin du fichier
+for _k, (_label, _css, _files) in CUSTOM.items():
+    for _i, _f in enumerate(_files):
+        CUSTOM_FILE[f"{_k}{_i}"] = os.path.join(FONT_DIR, _f + ".ttf")
 PS_NAME = {
     "helv": "Helvetica", "hebo": "Helvetica-Bold", "heit": "Helvetica-Oblique", "hebi": "Helvetica-BoldOblique",
     "tiro": "Times-Roman", "tibo": "Times-Bold", "tiit": "Times-Italic", "tibi": "Times-BoldItalic",
@@ -32,7 +48,7 @@ _metric = {}
 
 def metric(key):
     if key not in _metric:
-        _metric[key] = pymupdf.Font(key)
+        _metric[key] = pymupdf.Font(fontfile=CUSTOM_FILE[key]) if key in CUSTOM_FILE else pymupdf.Font(key)
     return _metric[key]
 
 
@@ -195,8 +211,46 @@ def ap_stream(items, W, H, color, fill, border_w, pad):
     return b"\n".join(out), used
 
 
+def _embed_custom(doc, key):
+    """Police TrueType réduite aux caractères WinAnsi, intégrée au PDF (police simple, encodage WinAnsi)."""
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+    path = CUSTOM_FILE[key]
+    chars = [bytes([c]).decode("cp1252", "ignore") for c in range(32, 256)]
+    chars = [c for c in chars if c]
+    opts = subset.Options(); opts.layout_features = ["kern"]; opts.notdef_outline = True; opts.name_IDs = [1, 2, 4, 6]
+    f = TTFont(path)
+    sub = subset.Subsetter(opts); sub.populate(text="".join(chars)); sub.subset(f)
+    upem = f["head"].unitsPerEm
+    cmap = f.getBestCmap(); hmtx = f["hmtx"]
+    widths = []
+    for c in range(32, 256):
+        ch = bytes([c]).decode("cp1252", "ignore")
+        g = cmap.get(ord(ch)) if ch else None
+        widths.append(round(hmtx[g][0] * 1000 / upem) if g else 0)
+    buf = io.BytesIO(); f.save(buf); data = buf.getvalue()
+    hhea, os2, head = f["hhea"], f["OS/2"], f["head"]
+    bold = bool(head.macStyle & 1); ital = bool(head.macStyle & 2)
+    flags = 32 | (64 if ital else 0)
+    asc, desc = round(hhea.ascent * 1000 / upem), round(hhea.descent * 1000 / upem)
+    cap = round(getattr(os2, "sCapHeight", 0) * 1000 / upem) or asc
+    bb = [round(v * 1000 / upem) for v in (head.xMin, head.yMin, head.xMax, head.yMax)]
+    name = re.sub(r"[^A-Za-z0-9-]", "", os.path.splitext(os.path.basename(path))[0]) or key
+    ff = doc.get_new_xref(); doc.update_object(ff, "<<>>"); doc.update_stream(ff, data, new=True)
+    doc.xref_set_key(ff, "Length1", str(len(data)))
+    fd = doc.get_new_xref()
+    doc.update_object(fd, f"<</Type/FontDescriptor/FontName/{name}/Flags {flags}/FontBBox[{bb[0]} {bb[1]} {bb[2]} {bb[3]}]"
+                          f"/ItalicAngle {-12 if ital else 0}/Ascent {asc}/Descent {desc}/CapHeight {cap}/StemV {120 if bold else 80}/FontFile2 {ff} 0 R>>")
+    fx = doc.get_new_xref()
+    doc.update_object(fx, f"<</Type/Font/Subtype/TrueType/BaseFont/{name}/FirstChar 32/LastChar 255/Widths[{' '.join(map(str, widths))}]"
+                          f"/Encoding/WinAnsiEncoding/FontDescriptor {fd} 0 R>>")
+    return fx
+
+
 def _font_obj(doc, ctx, key):
     fonts = ctx.setdefault("fonts", {})
+    if key in CUSTOM_FILE and key not in fonts:
+        fonts[key] = _embed_custom(doc, key)
     if key not in fonts:
         xref = doc.get_new_xref()
         doc.update_object(xref, f"<</Type/Font/Subtype/Type1/BaseFont/{PS_NAME[key]}/Encoding/WinAnsiEncoding>>")
@@ -214,16 +268,21 @@ def write_text_annot(doc, page, rect, paras, style, ctx):
     plain = plain_text(paras)
     size = style["size"]
     a = page.add_freetext_annot(
-        rect, plain, fontsize=size, fontname=style["font"],
+        rect, plain, fontsize=size, fontname=style["font"] if style["font"] in ("helv", "tiro", "cour") else "helv",
         text_color=hex_to_rgb(style["color"]),
         fill_color=hex_to_rgb(style["fill"]) if style["fill"] else None,
         border_width=1 if style["border"] else 0, align=style["align"])
-    a.set_rect(rect)
     pad, bw = 2.0, (1.0 if style["border"] else 0.0)
+    lh = min(max(float(style.get("lh", 1.2)), 0.8), 3.0)
+    # la zone grandit avec son texte : si le navigateur a compté moins de lignes que nous, on agrandit
+    need = 2 * pad + len(layout(paras, rect.width - 2 * pad, size, make_resolver(style["font"]))) * size * lh
+    if rect.height < need - 0.5:
+        rect = pymupdf.Rect(rect.x0, rect.y0, rect.x1, rect.y0 + need)
+    a.set_rect(rect)
     W, H = rect.width, rect.height
     resolve = make_resolver(style["font"])
     lines = layout(paras, W - 2 * pad, size, resolve)
-    items = place(lines, W - 2 * pad, size, 1.2, style["align"], pad + 0.946 * size)
+    items = place(lines, W - 2 * pad, size, lh, style["align"], pad + size * (lh / 2 + 0.3465))
     stream, used = ap_stream(items, W, H, hex_to_rgb(style["color"]),
                              hex_to_rgb(style["fill"]) if style["fill"] else None, bw, pad)
     # Attention : MuPDF régénère l'apparence des annotations quand on en ajoute une autre. On ne pose donc

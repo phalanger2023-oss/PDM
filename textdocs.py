@@ -371,7 +371,144 @@ def html_to_docx(html):
 
 
 # ------------------------------------------------------------------ Import Word (.docx)
+def _docx_run_html(run, W):
+    """Un morceau de texte Word -> HTML avec sa mise en forme (gras, italique, souligné, barré, couleur, taille, police, surlignage)."""
+    t = _esc(run.text or "").replace("\t", "&emsp;")
+    if not t:
+        return ""
+    f, css = run.font, []
+    try:
+        if f.color is not None and f.color.type is not None and f.color.rgb is not None and str(f.color.rgb) not in ("000000", "auto"):
+            css.append(f"color:#{f.color.rgb}")
+    except Exception:
+        pass
+    if f.size:
+        css.append(f"font-size:{round(f.size.pt)}pt")
+    if f.name and re.fullmatch(r"[\w .-]{2,40}", f.name):
+        css.append(f"font-family:{f.name}")
+    try:
+        hl = {"YELLOW": "#ffff00", "BRIGHT_GREEN": "#00ff00", "TURQUOISE": "#00ffff", "PINK": "#ff00ff", "BLUE": "#0000ff", "RED": "#ff0000",
+              "GRAY_25": "#c0c0c0", "GRAY_50": "#808080", "DARK_YELLOW": "#808000", "GREEN": "#008000"}.get(f.highlight_color.name) if f.highlight_color else None
+    except Exception:
+        hl = None
+    if hl:
+        css.append(f"background-color:{hl}")
+    if css:
+        t = f'<span style="{";".join(css)}">{t}</span>'
+    if f.bold:
+        t = f"<strong>{t}</strong>"
+    if f.italic:
+        t = f"<em>{t}</em>"
+    if f.underline:
+        t = f"<u>{t}</u>"
+    if f.strike:
+        t = f"<s>{t}</s>"
+    if f.subscript:
+        t = f"<sub>{t}</sub>"
+    if f.superscript:
+        t = f"<sup>{t}</sup>"
+    return t
+
+
+def _docx_images(par, doc):
+    """Images en ligne d'un paragraphe Word, en data:image."""
+    out = []
+    for blip in par._p.xpath(".//a:blip"):
+        rid = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
+        try:
+            part = doc.part.related_parts[rid]
+            ct = part.content_type
+            if ct in ("image/png", "image/jpeg", "image/gif", "image/webp"):
+                out.append(f'<img src="data:{ct};base64,{base64.b64encode(part.blob).decode()}">')
+        except Exception:
+            pass
+    return "".join(out)
+
+
 def docx_to_html(data):
-    import mammoth
-    res = mammoth.convert_to_html(io.BytesIO(data))
-    return sanitize_html(res.value)
+    """Word -> HTML : titres, listes, tableaux, images, alignement, couleurs, tailles, polices.
+    Si le fichier résiste à notre lecture, on retombe sur mammoth (plus simple, moins fidèle)."""
+    try:
+        return sanitize_html(_docx_to_html_rich(data))
+    except Exception:
+        import mammoth
+        return sanitize_html(mammoth.convert_to_html(io.BytesIO(data)).value)
+
+
+def _docx_to_html_rich(data):
+    from docx import Document
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    doc = Document(io.BytesIO(data))
+    ALIGN = {0: "left", 1: "center", 2: "right", 3: "justify"}
+
+    def para_html(par):
+        name = (par.style.name or "") if par.style is not None else ""
+        inner = "".join(_docx_run_html(r, doc) for r in par.runs) + _docx_images(par, doc)
+        for h in par._p.xpath(".//w:hyperlink"):   # liens : le texte est dans le lien, pas dans par.runs
+            href = None
+            try:
+                href = doc.part.rels[h.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")].target_ref
+            except Exception:
+                pass
+            txt = "".join(t.text or "" for t in h.xpath(".//w:t"))
+            if txt:
+                inner += f'<a href="{_esc(href)}">{_esc(txt)}</a>' if href and re.match(r"https?://", href) else _esc(txt)
+        return name, inner
+
+    def para_style(par):
+        css = []
+        al = par.alignment
+        if al is not None and int(al) in ALIGN and int(al) != 0:
+            css.append(f"text-align:{ALIGN[int(al)]}")
+        ind = par.paragraph_format.left_indent
+        if ind and ind.pt > 0:
+            css.append(f"margin-left:{min(round(ind.pt), 200)}px")
+        return f' style="{";".join(css)}"' if css else ""
+
+    def table_html(tb):
+        rows = []
+        for r in tb.rows:
+            cells, seen = [], set()
+            for c in r.cells:
+                if id(c._tc) in seen:   # cellule fusionnée : déjà vue
+                    continue
+                seen.add(id(c._tc))
+                span = getattr(c._tc, "grid_span", 1) or 1
+                cells.append(f'<td{f" colspan={chr(34)}{span}{chr(34)}" if span > 1 else ""}>' + block_html(c) + "</td>")
+            rows.append("<tr>" + "".join(cells) + "</tr>")
+        return "<table><tbody>" + "".join(rows) + "</tbody></table>"
+
+    def block_html(container):
+        out, cur_list = [], None   # cur_list = "ul" | "ol" en cours
+        body = container.element.body if hasattr(container, "element") else container._tc
+        for child in body.iterchildren():
+            tag = child.tag.split("}")[-1]
+            if tag == "tbl":
+                if cur_list: out.append(f"</{cur_list}>"); cur_list = None
+                out.append(table_html(Table(child, container)))
+            elif tag == "p":
+                par = Paragraph(child, container)
+                name, inner = para_html(par)
+                is_list = name.lower().startswith("list") or bool(child.xpath("./w:pPr/w:numPr"))
+                if is_list:
+                    kind = "ol" if ("number" in name.lower() or "num" in name.lower()) else "ul"
+                    if cur_list != kind:
+                        if cur_list: out.append(f"</{cur_list}>")
+                        out.append(f"<{kind}>"); cur_list = kind
+                    out.append(f"<li>{inner}</li>")
+                    continue
+                if cur_list: out.append(f"</{cur_list}>"); cur_list = None
+                if not inner.strip():
+                    out.append("<p><br></p>" if not child.xpath(".//w:br[@w:type='page']") else "<hr>")
+                    continue
+                m = re.match(r"(?:heading|titre)\s*(\d)", name.lower())
+                if name.lower() == "title": h = "h1"
+                elif m: h = f"h{min(int(m.group(1)), 3)}"
+                else: h = "p"
+                out.append(f"<{h}{para_style(par)}>{inner}</{h}>")
+        if cur_list: out.append(f"</{cur_list}>")
+        return "".join(out)
+
+    return block_html(doc)

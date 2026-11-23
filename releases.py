@@ -8,6 +8,24 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.5.0", "date": "2026-11-23",
+        "nouveautes": [
+            "Zone de texte façon Canva : elle grandit toute seule quand tu écris (Entrée ajoute une ligne), la barre sur chaque côté règle la largeur du texte, la poignée du haut agrandit ou réduit le texte, et le correcteur orthographique ne s'active que dans la zone sélectionnée. Une zone vide qu'on quitte disparaît.",
+            "Interligne réglable (zones de texte et paragraphes du PDF), et 7 nouvelles polices intégrées au PDF final (Calibri-like, Cambria-like, Cardo, Crimson, DejaVu, Comic Relief, Anton) : ce que tu vois à l'écran est ce qui est écrit dans le PDF.",
+            "Calques : « premier plan / avancer / reculer / arrière-plan » pour les zones de texte et les formes, respectés dans le PDF enregistré (un texte peut maintenant passer sous une forme).",
+            "Copier, coller et dupliquer une zone de texte ou une forme (boutons, Ctrl+C, Ctrl+V, Ctrl+D).",
+            "Zoom au pincement (doigts ou pavé tactile) et Ctrl + molette.",
+            "Les options d'édition s'affichent dans un panneau à gauche (sur grand écran) au lieu d'une barre en haut.",
+            "Menu « Plus » (⋯) : apparence, personnalisation, raccourcis, déconnexion (seulement depuis l'accueil). Nouveau logo.",
+        ],
+        "ameliorations": [
+            "Importer un Word (.docx) garde maintenant les couleurs, tailles, polices, surlignages, l'alignement, les tableaux (cellules fusionnées), les listes et les images.",
+        ],
+        "corrections": [
+            "Avec un fort zoom, le bord gauche de la page n'est plus coupé : on peut défiler horizontalement jusqu'à lui.",
+        ],
+    },
+    {
         "version": "1.4.0", "date": "2026-11-22",
         "nouveautes": [
             "Documents texte, façon Word / Google Docs : sur l'accueil, « Nouveau document texte » ouvre une feuille blanche à écrire. Ils sont rangés dans les mêmes dossiers que tes PDF (vignette, renommer, déplacer, supprimer, glisser-déposer).",

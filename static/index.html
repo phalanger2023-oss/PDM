@@ -46,6 +46,12 @@
       <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
       <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></symbol>
       <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-layer-front" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M4 15V5.5A1.5 1.5 0 0 1 5.5 4H15"/><path d="M12 12h5M14.5 9.5v5" /></symbol>
+      <symbol id="i-layer-back" viewBox="0 0 24 24"><rect x="4" y="4" width="11" height="11" rx="1.5"/><path d="M20 9v9.5a1.5 1.5 0 0 1-1.5 1.5H9"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+      <symbol id="i-paste" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V4h6v1M9 11h6M9 15h4"/></symbol>
+      <symbol id="i-dup" viewBox="0 0 24 24"><rect x="4" y="4" width="11" height="11" rx="2"/><rect x="9" y="9" width="11" height="11" rx="2"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
       <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
       <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
       <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/></symbol>
@@ -63,7 +69,7 @@
         <svg class="ic"><use href="#i-folder"/></svg>
         <input type="file" id="file" accept="application/pdf" hidden>
       </label>
-      <button id="homeBtn" class="tool" title="Accueil : tous vos documents" aria-label="Accueil"><svg class="ic"><use href="#i-home"/></svg></button>
+      <button id="homeBtn" class="tool logo-btn" title="Accueil : tous vos documents" aria-label="Accueil"><img src="/static/logo.svg" alt="" width="26" height="26"></button>
 
       <!-- Tout ce qui concerne le document ouvert (masqué sur la page d'accueil) -->
       <div class="tgroup doc-only">
@@ -123,8 +129,18 @@
 
       <button id="download" class="tool primary doc-only" disabled title="Télécharger le PDF final (votre PDF d'origine n'est jamais modifié)" aria-label="Télécharger le PDF"><svg class="ic"><use href="#i-download"/></svg></button>
       <span class="sep"></span>
-      <div class="popwrap">
-        <button id="helpBtn" class="tool" title="Raccourcis clavier (?)" aria-label="Aide et raccourcis"><svg class="ic"><use href="#i-help"/></svg></button>
+      <!-- Menu « Plus » : apparence, aide, compte -->
+      <div class="popwrap" id="moreWrap">
+        <button id="moreBtn" class="tool" title="Plus : apparence, aide, compte" aria-label="Plus" aria-haspopup="menu"><svg class="ic"><use href="#i-more"/></svg></button>
+        <div class="popover right menu" id="more" role="menu" hidden>
+          <div class="menu-title">Apparence</div>
+          <button id="theme" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-moon"/></svg><span>Basculer clair / sombre</span></button>
+          <button id="settingsBtn" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-gear"/></svg><span>Personnaliser l'interface…</span></button>
+          <div class="menu-title">Aide</div>
+          <button id="helpBtn" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-help"/></svg><span>Raccourcis clavier</span></button>
+          <div class="menu-title menu-account">Compte</div>
+          <button id="logout" class="menu-item menu-account" role="menuitem" hidden><svg class="ic"><use href="#i-logout"/></svg><span>Se déconnecter</span></button>
+        </div>
         <div class="popover right" id="help" hidden>
           <h2 class="ptitle">Raccourcis clavier</h2>
           <dl class="keys">
@@ -141,11 +157,6 @@
             <dt>?</dt><dd>Afficher cette aide</dd>
           </dl>
         </div>
-      </div>
-      <button id="logout" class="tool" hidden title="Se déconnecter" aria-label="Se déconnecter"><svg class="ic"><use href="#i-logout"/></svg></button>
-      <button id="theme" class="tool" title="Basculer clair / sombre" aria-label="Thème"><svg class="ic"><use href="#i-moon"/></svg></button>
-      <div class="popwrap">
-        <button id="settingsBtn" class="tool" title="Personnaliser l'interface" aria-label="Personnaliser"><svg class="ic"><use href="#i-gear"/></svg></button>
         <div class="popover right" id="settings" hidden>
           <div class="prow"><span>Thème</span>
             <div class="modes" id="themeSeg">
@@ -202,13 +213,26 @@
     <!-- Barre : mise en page du texte -->
     <div class="ctxbar" id="formatbar" hidden>
       <span class="ctxtitle" id="fTitle">Texte</span>
+      <span class="plabel">Police</span>
       <select id="fFont" title="Police">
         <option value="helv">Sans empattement</option>
         <option value="tiro">Serif</option>
         <option value="cour">Machine à écrire</option>
+        <optgroup label="Autres polices">
+          <option value="carl">Calibri-like (Carlito)</option>
+          <option value="cala">Cambria-like (Caladea)</option>
+          <option value="card">Cardo (livre)</option>
+          <option value="crim">Crimson (élégant)</option>
+          <option value="deja">DejaVu Sans (large)</option>
+          <option value="comi">Comic Relief (ludique)</option>
+          <option value="anto">Anton (titre)</option>
+        </optgroup>
       </select>
+      <span class="plabel">Taille du texte</span>
       <input type="number" id="fSize" min="6" max="120" step="1" value="14" title="Taille (points)">
+      <span class="plabel">Couleur</span>
       <input type="color" id="fColor" value="#000000" title="Couleur du texte">
+      <label class="lhlabel" title="Interligne (espace entre les lignes)">Interligne <input type="number" id="fLh" min="0.8" max="3" step="0.1" value="1.2"></label>
       <span class="sep"></span>
       <!-- Mise en forme du texte sélectionné : gras, italique, souligné, barré -->
       <div class="modes">
@@ -227,6 +251,19 @@
       <button class="annot-only tool toggle" id="fFillOn" aria-pressed="false" title="Fond de la zone"><svg class="ic"><use href="#i-fill"/></svg></button>
       <input class="annot-only" type="color" id="fFill" value="#ffffcc" title="Couleur du fond">
       <button class="annot-only tool toggle" id="fBorder" aria-pressed="false" title="Cadre (couleur du texte)"><svg class="ic"><use href="#i-frame"/></svg></button>
+      <span class="annot-only sep"></span>
+      <div class="annot-only layerbtns" role="group" aria-label="Calques">
+        <span class="grouplabel">Calques</span>
+        <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan"><svg class="ic"><use href="#i-layer-front"/></svg></button>
+        <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer"><svg class="ic"><use href="#i-chev-up"/></svg></button>
+        <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer"><svg class="ic"><use href="#i-chev-down"/></svg></button>
+        <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan"><svg class="ic"><use href="#i-layer-back"/></svg></button>
+      </div>
+      <div class="annot-only layerbtns" role="group" aria-label="Copier-coller">
+        <button class="tool" id="fCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg></button>
+        <button class="tool" id="fPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg></button>
+        <button class="tool" id="fDup" title="Dupliquer (Ctrl+D)" aria-label="Dupliquer"><svg class="ic"><use href="#i-dup"/></svg></button>
+      </div>
       <span class="sep"></span>
       <button id="fReset" class="native-only tool" disabled title="Rétablir l'original pour l'élément sélectionné" aria-label="Rétablir"><svg class="ic"><use href="#i-undo"/></svg></button>
       <button id="fDelete" class="tool danger" disabled title="Supprimer l'élément sélectionné (Suppr)" aria-label="Supprimer"><svg class="ic"><use href="#i-trash"/></svg></button>
@@ -248,6 +285,19 @@
       <input type="number" id="sWidth" min="1" max="20" step="1" value="2" title="Épaisseur du trait">
       <button class="tool toggle" id="sFillOn" aria-pressed="false" title="Remplissage (rectangle, ellipse, triangle)"><svg class="ic"><use href="#i-fill"/></svg></button>
       <input type="color" id="sFill" value="#ffec99" title="Couleur du remplissage">
+      <span class="sep"></span>
+      <div class="layerbtns" role="group" aria-label="Calques">
+        <span class="grouplabel">Calques</span>
+        <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan"><svg class="ic"><use href="#i-layer-front"/></svg></button>
+        <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer"><svg class="ic"><use href="#i-chev-up"/></svg></button>
+        <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer"><svg class="ic"><use href="#i-chev-down"/></svg></button>
+        <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan"><svg class="ic"><use href="#i-layer-back"/></svg></button>
+      </div>
+      <div class="layerbtns" role="group" aria-label="Copier-coller">
+        <button class="tool" id="sCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg></button>
+        <button class="tool" id="sPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg></button>
+        <button class="tool" id="sDup" title="Dupliquer (Ctrl+D)" aria-label="Dupliquer"><svg class="ic"><use href="#i-dup"/></svg></button>
+      </div>
       <span class="sep"></span>
       <button id="sDelete" class="tool danger" disabled title="Supprimer la forme sélectionnée (Suppr)" aria-label="Supprimer"><svg class="ic"><use href="#i-trash"/></svg></button>
     </div>
@@ -296,7 +346,7 @@
 
       <!-- En-tête centré : le nom du site et l'action principale -->
       <header class="hero">
-        <div class="brand-mark"><svg class="ic xl"><use href="#i-pdfedit"/></svg></div>
+        <div class="brand-mark"><img src="/static/logo.svg" alt="" width="64" height="64"></div>
         <h1 class="brand-name">Personal Document Modifier</h1>
         <p class="tagline">Annotez, surlignez et retouchez vos PDF.<br>Tout s'enregistre automatiquement : reprenez un document quand vous voulez.</p>
         <label class="btn primary big">
