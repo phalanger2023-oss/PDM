@@ -640,8 +640,8 @@ body.phone .tb-bottom { height: 16px; width: 56px; margin-left: -28px; bottom: -
 .colfav-cell:hover .colfav-x { display: block; } body.phone .colfav-x { display: block; }
 body.phone .colfav-btn { font-size: 20px; padding: 6px 8px; }
 
-/* Accueil : logo DeepWell en grand, très pâle, comme un fond d'écran (remplaçable : static/home-bg.svg) */
-body[data-view="home"]::before { content: ""; position: fixed; right: -6vmin; bottom: -8vmin; width: 78vmin; height: 78vmin; background: url(/static/home-bg.svg) center / contain no-repeat; opacity: .07; transform: rotate(-9deg); pointer-events: none; z-index: 0; }
+/* Accueil : logo DeepWell en grand, très pâle, comme un fond d'écran (logo choisi dans DeepWell, sinon static/home-bg.svg) */
+body[data-view="home"]::before { content: ""; position: fixed; right: -6vmin; bottom: -8vmin; width: 78vmin; height: 78vmin; background: url(/home-logo.svg) center / contain no-repeat; opacity: .07; transform: rotate(-9deg); pointer-events: none; z-index: 0; }
 body[data-view="home"] .home { position: relative; z-index: 1; }
 @media (prefers-color-scheme: dark) { body[data-view="home"]::before { opacity: .1; } }
 

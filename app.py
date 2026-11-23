@@ -223,7 +223,7 @@ def require_login():
         if origin and urlparse(origin).netloc != request.host:
             abort(403)
     p = request.path
-    if p in ("/api/integration/ping", "/api/integration/docs"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
+    if p in ("/api/integration/ping", "/api/integration/docs", "/api/integration/logo"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
         return None if _key_ok(request.remote_addr or "?") else (jsonify(error="Clé d'intégration refusée"), 401)
     if p in ("/login", "/api/login", "/api/me", "/healthz") or p.startswith("/static/"):
         return None
@@ -1194,6 +1194,32 @@ def integration_add_doc():
     write_dossiers(m)
     remember(folder)
     return jsonify(name=name, folder=folder, existing=False)
+
+
+LOGO_FILE = DOCS / ".logo_deepwell.svg"       # logo choisi dans DeepWell (fond de l'accueil) ; absent = logo de base
+
+
+@app.post("/api/integration/logo")
+def integration_logo():
+    """DeepWell envoie l'icône choisie dans ses réglages (SVG). Vide = on revient au logo de base."""
+    svg = str((request.get_json(silent=True) or {}).get("svg") or "")
+    if not svg.strip():
+        LOGO_FILE.unlink(missing_ok=True)
+        return jsonify(ok=True, custom=False)
+    low = svg.lower()
+    if len(svg) > 4_000_000 or not low.lstrip().startswith("<svg") or "<script" in low or "<foreignobject" in low or re.search(r"\son\w+\s*=", low):
+        return jsonify(error="Logo refusé"), 400
+    LOGO_FILE.write_text(svg, encoding="utf-8")
+    return jsonify(ok=True, custom=True)
+
+
+@app.get("/home-logo.svg")
+def home_logo():
+    """Fond de l'accueil : le logo envoyé par DeepWell, sinon celui de base (static/home-bg.svg)."""
+    path = LOGO_FILE if LOGO_FILE.exists() else Path(app.static_folder) / "home-bg.svg"
+    resp = send_file(path, mimetype="image/svg+xml", conditional=True)
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 migrate_dossiers()
