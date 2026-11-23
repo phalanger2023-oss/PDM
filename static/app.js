@@ -1831,7 +1831,7 @@ function copyElement() {
   if (multi.length > 1) {
     syncTextFromDom();
     elClip = { kind: "m", list: multi.map((m) => ({ kind: shapes.includes(m) ? "s" : "t", data: JSON.parse(JSON.stringify(m)) })) };
-    try { navigator.clipboard.writeText(""); } catch (e) {}
+    navigator.clipboard?.writeText("").catch(() => {});
     notify(`${multi.length} éléments copiés`, "ok", 1500);
     return true;
   }
@@ -1843,7 +1843,7 @@ function copyElement() {
     for (const k of ["font", "size", "color", "align"]) if (it[k] !== undefined && it[k] !== null) c[k] = it[k];
     elClip = { kind: "t", data: c };
   } else elClip = { kind: it === selectedShape ? "s" : "t", data: JSON.parse(JSON.stringify(it)) };
-  try { navigator.clipboard.writeText(elClip.kind === "t" ? plainOf(elClip.data.paras) : ""); } catch (e) {}
+  navigator.clipboard?.writeText(elClip.kind === "t" ? plainOf(elClip.data.paras) : "").catch(() => {});
   notify("Élément copié", "ok", 1500);
   return true;
 }
