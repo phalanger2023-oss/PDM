@@ -17,6 +17,10 @@ RELEASES = [
             "Zoom au pincement (doigts ou pavé tactile) et Ctrl + molette.",
             "Les options d'édition s'affichent dans un panneau à gauche (sur grand écran) au lieu d'une barre en haut.",
             "Menu « Plus » (⋯) : apparence, personnalisation, raccourcis, déconnexion (seulement depuis l'accueil). Nouveau logo.",
+            "Crayon : dans « Forme », nouvel outil de dessin à main levée (souris, doigt ou stylet). Le tracé se déplace, se copie, se supprime comme une forme et s'enregistre dans le PDF.",
+            "Sélection multiple : Maj + clic ajoute des zones de texte et des formes à la sélection ; Ctrl+C / Ctrl+V / Ctrl+D copient ou dupliquent le groupe, Suppr l'efface (Ctrl+Z annule).",
+            "Ouverture d'un document : retour à la dernière page lue ET au zoom que tu aviez, document par document.",
+            "Éditeur de texte (Word) : icônes de la barre refaites en traits clairs (alignements, listes, retraits, indice/exposant, tableau…), l'outil actif (gras, liste, alignement…) est surligné, et les boutons de tableau sont explicites.",
             "Mode téléphone (menu ⋯ : automatique / activé / désactivé) : boutons plus grands, options d'édition en bandeau défilant en bas de l'écran, poignées de zone de texte agrandies pour le doigt.",
         ],
         "ameliorations": [

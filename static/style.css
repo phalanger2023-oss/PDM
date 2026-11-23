@@ -611,3 +611,15 @@ body.phone .ctxbar:not(#findbar):not([hidden]) select { width: auto; min-width: 
 body.phone #viewer, body.phone.has-thumbs #viewer, body:has(.ctxbar:not(#findbar):not([hidden])).phone #viewer { margin-left: 0 !important; padding: 8px 4px 90px; }
 body.phone .tb-edge { width: 14px; height: 44px; margin-top: -22px; } body.phone .tb-edge.l { left: -9px; } body.phone .tb-edge.r { right: -9px; } body.phone .tb-top { height: 16px; width: 56px; margin-left: -28px; top: -14px; } body.phone .tb-grip { width: 34px; height: 30px; top: -32px; font-size: 18px; }
 body.phone .ctxbar:not(#findbar):not([hidden]) { height: 64px; align-items: center; align-content: center; box-sizing: border-box; }
+
+/* Crayon : le doigt ou le stylet dessine au lieu de faire défiler la page */
+body.draw-pen .page { touch-action: none; }
+
+/* Barre du texte : icônes en traits, état actif visible */
+.tx-btn .ic { width: 18px; height: 18px; }
+.tx-btn.on { background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.tx-tbl { gap: 4px; } .tx-tbl .ic { width: 18px; height: 18px; }
+
+/* Sélection multiple (Maj + clic) */
+.tb.multi { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.sh-multi { border-color: var(--accent); }

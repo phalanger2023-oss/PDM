@@ -106,6 +106,21 @@ txMenu.addEventListener("click", async (e) => {
 });
 
 // ---------- Barre d'outils ----------
+// Icônes de la barre (traits simples, comme le reste de l'application) — plus de flèches ni de symboles ambigus
+const ICO = {
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>', redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',
+  sup: '<path d="M4 19l8-9M12 19L4 10"/><path d="M16 8c0-2 1.2-3 2.6-3S21 6 21 7.3c0 1.2-1 2-2.2 2.9L16 12.5h5"/>', sub: '<path d="M4 15l8-9M12 15L4 6"/><path d="M16 20c0-2 1.2-3 2.6-3S21 18 21 19.3c0 1.2-1 2-2.2 2.9L16 24.5h5" transform="translate(0 -3)"/>',
+  left: '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>', center: '<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>', right: '<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>', justify: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
+  ul: '<circle cx="5" cy="7" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="17" r="1"/><path d="M10 7h10M10 12h10M10 17h10"/>', ol: '<path d="M10 7h10M10 12h10M10 17h10"/><path d="M4 5.5l1.5-1v4M4 14.5c0-1 2.5-1 2.5.3 0 1-2.5 2-2.5 2.7h2.7"/>',
+  indent: '<path d="M4 6h16M12 10h8M12 14h8M4 18h16"/><path d="M4 9.5l3 2.5-3 2.5z"/>', outdent: '<path d="M4 6h16M12 10h8M12 14h8M4 18h16"/><path d="M7 9.5L4 12l3 2.5z"/>',
+  link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+  image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',
+  table: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 10h17M3.5 15h17M10 4.5v15"/>', hr: '<path d="M4 12h16"/><path d="M8 7h8M8 17h8" opacity=".35"/>',
+  clear: '<path d="M5 6h10M10 6l-3 12M8 18h5"/><path d="M15 14l5 5M20 14l-5 5"/>',
+  rowAdd: '<rect x="3.5" y="4.5" width="17" height="8" rx="1.5"/><path d="M12 15v6M9 18h6"/>', colAdd: '<rect x="3.5" y="4.5" width="8" height="15" rx="1.5"/><path d="M17 8v8M13 12h8"/>',
+  rowDel: '<rect x="3.5" y="4.5" width="17" height="8" rx="1.5"/><path d="M9 18h6"/>', colDel: '<rect x="3.5" y="4.5" width="8" height="15" rx="1.5"/><path d="M13 12h8"/>', tblDel: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 9l8 6M16 9l-8 6"/>',
+};
+const ic = (n) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${ICO[n]}</svg>`;
 const FONTS = ["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana", "Trebuchet MS", "Comic Sans MS"];
 const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
 const tbtn = (label, title, fn, cls = "") => {
@@ -141,42 +156,45 @@ function colorInput(title, label, command) {
   wrap.appendChild(inp); txTools.appendChild(wrap);
 }
 
-tbtn("↶", "Annuler (Ctrl+Z)", () => cmd("undo")); tbtn("↷", "Rétablir (Ctrl+Y)", () => cmd("redo")); tsep();
+tbtn(ic("undo"), "Annuler (Ctrl+Z)", () => cmd("undo")); tbtn(ic("redo"), "Rétablir (Ctrl+Y)", () => cmd("redo")); tsep();
 tsel("Style de paragraphe", [["", "Style"], ["p", "Texte normal"], ["h1", "Titre 1"], ["h2", "Titre 2"], ["h3", "Titre 3"], ["blockquote", "Citation"]], (v) => v && cmd("formatBlock", v), "108px");
 tsel("Police", [["", "Police"], ...FONTS.map((f) => [f, f])], (v) => { if (v) { cmd("styleWithCSS", true); cmd("fontName", v); } }, "104px");
 tsel("Taille du texte", [["", "Taille"], ...SIZES.map((n) => [n, n + " pt"])], (v) => v && setFontSize(v), "74px"); tsep();
-tbtn("<b>G</b>", "Gras (Ctrl+B)", () => cmd("bold")); tbtn("<i>I</i>", "Italique (Ctrl+I)", () => cmd("italic"));
-tbtn("<u>S</u>", "Souligné (Ctrl+U)", () => cmd("underline")); tbtn("<s>B</s>", "Barré", () => cmd("strikeThrough"));
-tbtn("x<sup>2</sup>", "Exposant", () => cmd("superscript")); tbtn("x<sub>2</sub>", "Indice", () => cmd("subscript"));
+const B_ = {}; const sb = (st, b) => { B_[st] = b; return b; };
+sb("bold", tbtn("<b>G</b>", "Gras (Ctrl+B)", () => cmd("bold"))); sb("italic", tbtn("<i>I</i>", "Italique (Ctrl+I)", () => cmd("italic")));
+sb("underline", tbtn("<u>S</u>", "Souligné (Ctrl+U)", () => cmd("underline"))); sb("strikeThrough", tbtn("<s>B</s>", "Barré", () => cmd("strikeThrough")));
+sb("superscript", tbtn(ic("sup"), "Exposant (x²)", () => cmd("superscript"))); sb("subscript", tbtn(ic("sub"), "Indice (x₂)", () => cmd("subscript")));
 colorInput("Couleur du texte", "<b style='color:#d32f2f'>A</b>", "foreColor"); colorInput("Surligner", "<b style='background:#ff0;padding:0 3px'>A</b>", "hiliteColor"); tsep();
-tbtn("⬅", "Aligner à gauche", () => cmd("justifyLeft")); tbtn("↔", "Centrer", () => cmd("justifyCenter")); tbtn("➡", "Aligner à droite", () => cmd("justifyRight")); tbtn("☰", "Justifier", () => cmd("justifyFull")); tsep();
-tbtn("• —", "Liste à puces", () => cmd("insertUnorderedList")); tbtn("1. —", "Liste numérotée", () => cmd("insertOrderedList"));
-tbtn("⇥", "Augmenter le retrait", () => cmd("indent")); tbtn("⇤", "Diminuer le retrait", () => cmd("outdent")); tsep();
-tbtn("🔗", "Insérer un lien", () => {
+sb("justifyLeft", tbtn(ic("left"), "Aligner à gauche", () => cmd("justifyLeft"))); sb("justifyCenter", tbtn(ic("center"), "Centrer", () => cmd("justifyCenter"))); sb("justifyRight", tbtn(ic("right"), "Aligner à droite", () => cmd("justifyRight"))); sb("justifyFull", tbtn(ic("justify"), "Justifier", () => cmd("justifyFull"))); tsep();
+sb("insertUnorderedList", tbtn(ic("ul"), "Liste à puces", () => cmd("insertUnorderedList"))); sb("insertOrderedList", tbtn(ic("ol"), "Liste numérotée", () => cmd("insertOrderedList")));
+tbtn(ic("indent"), "Augmenter le retrait", () => cmd("indent")); tbtn(ic("outdent"), "Diminuer le retrait", () => cmd("outdent")); tsep();
+tbtn(ic("link"), "Insérer un lien", () => {
   const sel = getSelection(); const saved = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
   const url = prompt("Adresse du lien (https://…) :", "https://"); if (!url || !/^(https?:\/\/|mailto:)/i.test(url.trim())) { if (url) fail("L'adresse doit commencer par https://"); return; }
   if (saved) { sel.removeAllRanges(); sel.addRange(saved); }
   if (sel.isCollapsed) cmd("insertHTML", `<a href="${url.trim().replace(/"/g, "%22")}">${url.trim().replace(/</g, "&lt;")}</a>`); else cmd("createLink", url.trim());
 });
-tbtn("🖼", "Insérer une image", () => $("txImg").click());
-tbtn("▦", "Insérer un tableau", () => {
+tbtn(ic("image"), "Insérer une image", () => $("txImg").click());
+tbtn(ic("table"), "Insérer un tableau", () => {
   const v = prompt("Tableau : lignes × colonnes (ex. 3x4)", "3x3"); const m = /^(\d{1,2})\s*[x×*]\s*(\d{1,2})$/i.exec((v || "").trim()); if (!m) return;
   const r = +m[1], c = +m[2]; let h = '<table style="width:100%"><tbody>';
   for (let i = 0; i < r; i++) { h += "<tr>"; for (let j = 0; j < c; j++) h += i === 0 ? "<th><br></th>" : "<td><br></td>"; h += "</tr>"; }
   cmd("insertHTML", h + "</tbody></table><p><br></p>");
 });
-tbtn("―", "Ligne de séparation", () => cmd("insertHorizontalRule"));
-tbtn("Tx", "Effacer la mise en forme", () => { cmd("removeFormat"); cmd("formatBlock", "p"); }); tsep();
+tbtn(ic("hr"), "Ligne de séparation", () => cmd("insertHorizontalRule"));
+tbtn(ic("clear"), "Effacer la mise en forme", () => { cmd("removeFormat"); cmd("formatBlock", "p"); }); tsep();
 // outils de tableau (visibles quand le curseur est dans un tableau)
 const tbl = [];
 const tt = (label, title, fn) => { const b = tbtn(label, title, fn, "tx-tbl"); b.hidden = true; tbl.push(b); };
 const rowOf = () => closest("tr"), cellOf = () => closest("td,th");
-tt("+ ligne", "Ajouter une ligne dessous", () => { const r = rowOf(); if (!r) return; const n = r.cloneNode(true); n.querySelectorAll("td,th").forEach((c) => { c.innerHTML = "<br>"; }); r.after(n); });
-tt("+ col.", "Ajouter une colonne à droite", () => { const c = cellOf(); if (!c) return; const i = [...c.parentNode.children].indexOf(c); c.closest("table").querySelectorAll("tr").forEach((r) => { const x = r.children[i]; if (x) { const n = document.createElement(x.tagName); n.innerHTML = "<br>"; x.after(n); } }); });
-tt("− ligne", "Supprimer la ligne", () => { const r = rowOf(); if (!r) return; const t = r.closest("table"); if (t.querySelectorAll("tr").length <= 1) t.remove(); else r.remove(); });
-tt("− col.", "Supprimer la colonne", () => { const c = cellOf(); if (!c) return; const i = [...c.parentNode.children].indexOf(c), t = c.closest("table"); if (c.parentNode.children.length <= 1) { t.remove(); return; } t.querySelectorAll("tr").forEach((r) => r.children[i]?.remove()); });
-tt("✕ tableau", "Supprimer le tableau", () => closest("table")?.remove());
-document.addEventListener("selectionchange", () => { if (document.body.dataset.view !== "text") return; const on = !!closest("td,th"); tbl.forEach((b) => { b.hidden = !on; }); });
+tt(ic("rowAdd"), "Ajouter une ligne dessous", () => { const r = rowOf(); if (!r) return; const n = r.cloneNode(true); n.querySelectorAll("td,th").forEach((c) => { c.innerHTML = "<br>"; }); r.after(n); });
+tt(ic("colAdd"), "Ajouter une colonne à droite", () => { const c = cellOf(); if (!c) return; const i = [...c.parentNode.children].indexOf(c); c.closest("table").querySelectorAll("tr").forEach((r) => { const x = r.children[i]; if (x) { const n = document.createElement(x.tagName); n.innerHTML = "<br>"; x.after(n); } }); });
+tt(ic("rowDel"), "Supprimer la ligne", () => { const r = rowOf(); if (!r) return; const t = r.closest("table"); if (t.querySelectorAll("tr").length <= 1) t.remove(); else r.remove(); });
+tt(ic("colDel"), "Supprimer la colonne", () => { const c = cellOf(); if (!c) return; const i = [...c.parentNode.children].indexOf(c), t = c.closest("table"); if (c.parentNode.children.length <= 1) { t.remove(); return; } t.querySelectorAll("tr").forEach((r) => r.children[i]?.remove()); });
+tt(ic("tblDel"), "Supprimer le tableau", () => closest("table")?.remove());
+document.addEventListener("selectionchange", () => { if (document.body.dataset.view !== "text") return;
+  if (inEditor()) for (const [st, b] of Object.entries(B_)) { let on = false; try { on = document.queryCommandState(st); } catch (e) {} b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); } // l'outil actif est surligné
+  const on = !!closest("td,th"); tbl.forEach((b) => { b.hidden = !on; }); });
 
 // ---------- Images (réduites avant d'être intégrées au document) ----------
 async function insertImageFile(file) {

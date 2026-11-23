@@ -85,3 +85,24 @@ def test_import_word_garde_la_mise_en_forme():
     h = textdocs.docx_to_html(b.getvalue())
     assert "color:#FF0000" in h and "font-size:18pt" in h and "text-align:center" in h and "<strong>" in h
     assert 'colspan="2"' in h
+
+
+def test_crayon_a_main_levee_s_ecrit_et_se_relit():
+    pts = [[10 + i * 3, 40 + (i % 7) * 4] for i in range(40)]
+    s = {"page": 1, "kind": "pen", "x0": 10, "y0": 40, "x1": 130, "y1": 64, "stroke": "#3366ff", "width": 3, "fill": None, "pts": pts}
+    out, _ = app.annotate(base(), {"shapes": [s]})
+    doc = pymupdf.open(stream=out, filetype="pdf")
+    assert [a.type[1] for a in doc[0].annots()] == ["Ink"]
+    _, _, _, shapes = app.read_annotations(doc)
+    assert shapes[0]["kind"] == "pen" and len(shapes[0]["pts"]) == 40 and shapes[0]["stroke"] == "#3366ff"
+    # réenregistrer ne duplique pas et ne perd rien
+    out2, _ = app.annotate(out, {"shapes": [shapes[0]]})
+    doc2 = pymupdf.open(stream=out2, filetype="pdf")
+    assert len(list(doc2[0].annots())) == 1
+    # un tracé venu d'ailleurs (sans étiquette) n'est jamais touché
+    d3 = pymupdf.open(stream=base(), filetype="pdf"); a = d3[0].add_ink_annot([[(1, 1), (20, 20)]]); a.update()
+    out3, _ = app.annotate(d3.tobytes(), {"shapes": []})
+    assert [x.type[1] for x in pymupdf.open(stream=out3, filetype="pdf")[0].annots()] == ["Ink"]
+    # un tracé de moins de 2 points est ignoré
+    out4, _ = app.annotate(base(), {"shapes": [{**s, "pts": [[1, 1]]}]})
+    assert not list(pymupdf.open(stream=out4, filetype="pdf")[0].annots())

@@ -234,7 +234,9 @@ async function applyDocument(data, project) {
   fitName();
   $("namebox").hidden = false;
   pdfDoc = await pdfjsLib.getDocument(`/api/docs/${enc(docName)}/pdf?t=${Date.now()}`).promise;
-  if (innerWidth < 900) { // petit écran : on ajuste d'emblée la page à la largeur disponible
+  let savedZoom = 0; try { savedZoom = Number(localStorage.getItem("lastzoom:" + docName)) || 0; } catch (e) {}
+  if (savedZoom >= 0.5 && savedZoom <= 3) SCALE = savedZoom; // le zoom retrouvé comme on l'avait laissé sur ce document
+  else if (innerWidth < 900) { // petit écran : on ajuste d'emblée la page à la largeur disponible
     const p1 = await pdfDoc.getPage(1);
     SCALE = clamp((viewer.clientWidth - 24) / p1.getViewport({ scale: 1 }).width, 0.5, 3);
   }
@@ -443,7 +445,8 @@ async function renderPages(initial = false) {
                 canvasState: "empty", textState: "empty", task: null };
     pages.push(p);
     div.addEventListener("click", (ev) => onPageClick(ev, n - 1));
-    div.addEventListener("mousedown", (ev) => { startTextBox(ev, n - 1); startShape(ev, n - 1); });
+    div.addEventListener("mousedown", (ev) => { startTextBox(ev, n - 1); });
+    div.addEventListener("pointerdown", (ev) => { startShape(ev, n - 1); });
     if (n % 25 === 0) { setProgress(n, total); await new Promise((r) => setTimeout(r, 0)); }
   }
   redraw();
@@ -460,6 +463,7 @@ async function renderPages(initial = false) {
 
 function setZoom(v) {
   SCALE = v; prefs.zoom = v; savePrefs();
+  try { if (docName) localStorage.setItem("lastzoom:" + docName, String(v)); } catch (e) {}
   return renderPages();
 }
 $("zoomIn").addEventListener("click", () => { const v = ZOOM_STEPS.find((z) => z > SCALE + 0.01); if (v) setZoom(v); });
@@ -771,7 +775,7 @@ function buildBox(tb, idle = false) {
   if (idle) { // paragraphe du PDF pas encore touché : un clic l'active
     box.addEventListener("mousedown", (ev) => { ev.preventDefault(); activateNative(tb, ev.clientX, ev.clientY); });
   } else {
-    box.addEventListener("mousedown", () => select(tb));
+    box.addEventListener("mousedown", (ev) => { if (ev.shiftKey) { ev.preventDefault(); toggleMulti(tb); return; } select(tb); });
     ed.addEventListener("focus", () => select(tb));
     ed.addEventListener("keydown", (e) => { // Entrée = saut de ligne simple (pas de <div> imbriqués)
       if (e.key === "Enter") { e.preventDefault(); document.execCommand("insertLineBreak"); }
@@ -883,8 +887,32 @@ function dragHandle(handle, tb, kind) {
   });
 }
 
+// ---- Sélection multiple (Maj + clic sur des zones de texte et des formes) : copier, dupliquer, supprimer le groupe ----
+let multi = [], inRedraw = false;
+function paintMulti() {
+  multi = multi.filter((m) => textboxes.includes(m) || shapes.includes(m));
+  boxEls.forEach((box, t) => box.classList.toggle("multi", multi.includes(t)));
+  pages.forEach((p) => p.shUi.querySelectorAll(".sh-multi").forEach((e) => e.remove()));
+  for (const m of multi) {
+    if (!shapes.includes(m) || !pages[m.page - 1]) continue;
+    const b = el("div", "sh-box sh-multi");
+    Object.assign(b.style, { left: Math.min(m.x0, m.x1) * SCALE - 3 + "px", top: Math.min(m.y0, m.y1) * SCALE - 3 + "px", width: Math.abs(m.x1 - m.x0) * SCALE + 6 + "px", height: Math.abs(m.y1 - m.y0) * SCALE + 6 + "px" });
+    pages[m.page - 1].shUi.appendChild(b);
+  }
+}
+function clearMulti() { if (multi.length) { multi = []; paintMulti(); } }
+function toggleMulti(it) {
+  if (!multi.length) { const cur = layerItem(); if (cur && cur !== it) multi.push(cur); }
+  const i = multi.indexOf(it);
+  if (i >= 0) multi.splice(i, 1); else multi.push(it);
+  if (multi.length > 1 && document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); // les raccourcis agissent sur le groupe, pas sur le texte
+  paintMulti();
+  notify(multi.length > 1 ? `${multi.length} éléments sélectionnés (Ctrl+C copier, Suppr effacer)` : "Maj + clic : ajouter d'autres éléments", "ok", 1800);
+}
+
 // Sélection d'une zone : la barre de mise en page reflète alors ses réglages
 function select(tb) {
+  if (!inRedraw) clearMulti();
   const prev = selected;
   if (prev && prev !== tb && !prev.native && textboxes.includes(prev) && !plainOf(prev.paras || []).trim()) {
     textboxes = textboxes.filter((x) => x !== prev); // zone vide qu'on quitte : elle disparaît
@@ -1198,6 +1226,7 @@ function shapeGeom(s) {
     case "rect": return sv("rect", { x: bx, y: by, width: bw, height: bh });
     case "ellipse": return sv("ellipse", { cx: bx + bw / 2, cy: by + bh / 2, rx: bw / 2, ry: bh / 2 });
     case "triangle": return sv("polygon", { points: `${bx + bw / 2},${by} ${bx + bw},${by + bh} ${bx},${by + bh}` });
+    case "pen": return sv("polyline", { points: (s.pts || []).map(([x, y]) => `${x * SCALE},${y * SCALE}`).join(" "), "stroke-linejoin": "round", "stroke-linecap": "round" });
     default: return sv("line", { x1: x0, y1: y0, x2: x1, y2: y1 });
   }
 }
@@ -1246,6 +1275,7 @@ function renderShapes(pi) {
     p.tbLayer.appendChild(g);
   }
   if (selectedShape && selectedShape.page === pi + 1 && shapes.includes(selectedShape)) drawShapeUi(selectedShape, p);
+  if (multi.length) paintMulti();
 }
 function renderAllShapes() { pages.forEach((_, i) => renderShapes(i)); }
 
@@ -1265,12 +1295,17 @@ function drawShapeUi(s, p) {
     });
     p.shUi.appendChild(box);
     handle("x0", "y0", ""); handle("x1", "y0", "nesw"); handle("x0", "y1", "nesw"); handle("x1", "y1", "");
+  } else if (s.kind === "pen") { // un tracé : cadre pointillé, on le déplace en le faisant glisser
+    const box = el("div", "sh-box");
+    Object.assign(box.style, { left: Math.min(s.x0, s.x1) * SCALE - 3 + "px", top: Math.min(s.y0, s.y1) * SCALE - 3 + "px", width: Math.abs(s.x1 - s.x0) * SCALE + 6 + "px", height: Math.abs(s.y1 - s.y0) * SCALE + 6 + "px" });
+    p.shUi.appendChild(box);
   } else {
     handle("x0", "y0", "pt"); handle("x1", "y1", "pt"); // une ligne : une poignée à chaque bout
   }
 }
 
 function setSelectedShape(s) {
+  if (s && multi.length && !inRedraw) clearMulti();
   const prev = selectedShape;
   selectedShape = s;
   if (s && selectedHl) selectHl(null);
@@ -1288,18 +1323,28 @@ function startShape(ev, pi) {
   const b = pages[pi].div.getBoundingClientRect();
   const pt = (e) => [clamp((e.clientX - b.left) / SCALE, 0, b.width / SCALE), clamp((e.clientY - b.top) / SCALE, 0, b.height / SCALE)];
   const [sx, sy] = pt(ev);
+  const pen = shapeDefaults.kind === "pen";
   const s = {
     page: pi + 1, kind: shapeDefaults.kind, x0: sx, y0: sy, x1: sx, y1: sy,
     stroke: shapeDefaults.stroke, width: shapeDefaults.width,
     fill: isBoxKind(shapeDefaults.kind) ? shapeDefaults.fill : null, z: nextZ(),
   };
+  if (pen) s.pts = [[sx, sy]];
   shapes.push(s);
-  const move = (e) => { [s.x1, s.y1] = pt(e); renderShapes(pi); };
-  const up = (e) => {
-    window.removeEventListener("mousemove", move);
-    window.removeEventListener("mouseup", up);
-    [s.x1, s.y1] = pt(e);
-    if (Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6) { // simple clic : on ne crée rien
+  const fitPen = () => { const xs = s.pts.map((p) => p[0]), ys = s.pts.map((p) => p[1]); s.x0 = Math.min(...xs); s.x1 = Math.max(...xs); s.y0 = Math.min(...ys); s.y1 = Math.max(...ys); };
+  const move = (e) => {
+    const q = pt(e);
+    if (pen) { const l = s.pts[s.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) >= 1.2 && s.pts.length < 4000) s.pts.push(q); fitPen(); }
+    else [s.x1, s.y1] = q;
+    renderShapes(pi);
+  };
+  const end = (e, cancelled) => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", cancel);
+    if (!cancelled) { if (pen) { const q = pt(e), l = s.pts[s.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > 0.3) s.pts.push(q); fitPen(); } else [s.x1, s.y1] = pt(e); }
+    const tiny = pen ? (s.pts.length < 2 || Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 2) : Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6;
+    if (cancelled || tiny) { // simple clic : on ne crée rien
       shapes = shapes.filter((x) => x !== s);
       renderShapes(pi);
       return;
@@ -1309,22 +1354,26 @@ function startShape(ev, pi) {
     markDirty();
     updateCounters();
   };
-  window.addEventListener("mousemove", move);
-  window.addEventListener("mouseup", up);
+  const up = (e) => end(e, false), cancel = (e) => end(e, true);
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", cancel);
 }
 
 // Déplacer une forme en la faisant glisser
 function startShapeMove(ev, s) {
   if (ev.button !== 0) return;
   ev.preventDefault(); ev.stopPropagation();
+  if (ev.shiftKey) { toggleMulti(s); return; }
   setSelectedShape(s);
   const sx = ev.clientX, sy = ev.clientY;
-  const o = { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 };
+  const o = { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 }, op = s.pts ? s.pts.map((p) => [p[0], p[1]]) : null;
   let moved = false;
   const move = (e) => {
     const dx = (e.clientX - sx) / SCALE, dy = (e.clientY - sy) / SCALE;
     if (Math.abs(dx) + Math.abs(dy) > 0.5) moved = true;
     s.x0 = o.x0 + dx; s.x1 = o.x1 + dx; s.y0 = o.y0 + dy; s.y1 = o.y1 + dy;
+    if (op) s.pts = op.map(([x, y]) => [x + dx, y + dy]);
     renderShapes(s.page - 1);
   };
   const up = () => {
@@ -1360,7 +1409,9 @@ function startHandleDrag(ev, s, kx, ky) {
 const sStroke = $("sStroke"), sWidth = $("sWidth"), sFillOn = $("sFillOn"), sFill = $("sFill");
 const kindBtns = document.querySelectorAll("[data-kind]");
 
+function penTouch() { document.body.classList.toggle("draw-pen", shapeDefaults.kind === "pen" && currentMode() === "shape"); }
 function syncShapeControls(s) {
+  penTouch();
   kindBtns.forEach((b) => b.classList.toggle("active", b.dataset.kind === shapeDefaults.kind)); // l'outil choisi
   sStroke.value = s.stroke; sWidth.value = s.width;
   sFillOn.setAttribute("aria-pressed", String(!!s.fill)); if (s.fill) sFill.value = s.fill;
@@ -1466,7 +1517,7 @@ function redraw() {
   if (selectedHl && !highlights.includes(selectedHl)) selectedHl = null;
   drawHlSelection();
   updateBars();
-  select(selected);
+  inRedraw = true; select(selected); inRedraw = false;
   imgEls.forEach((b, i) => b.classList.toggle("selected", i === selectedImage));
   renderAllShapes();
   updateCounters();
@@ -1741,12 +1792,19 @@ function applyMode() {
   if (m === "native") ensureNative();
   redrawQuiet();
 }
+document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener("change", penTouch));
 function redrawQuiet() { const was = loading; loading = true; redraw(); loading = was; }
 document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener("change", applyMode));
 
 // ---- Copier / coller / dupliquer une zone de texte ou une forme ----
 let elClip = null; // { kind: "t" | "s", data }
 function copyElement() {
+  if (multi.length > 1) {
+    syncTextFromDom();
+    elClip = { kind: "m", list: multi.map((m) => ({ kind: shapes.includes(m) ? "s" : "t", data: JSON.parse(JSON.stringify(m)) })) };
+    notify(`${multi.length} éléments copiés`, "ok", 1500);
+    return true;
+  }
   const it = layerItem();
   if (!it) return false;
   syncTextFromDom();
@@ -1757,15 +1815,35 @@ function copyElement() {
 }
 function pasteElement(offset = 14) {
   if (!elClip) return false;
+  if (elClip.kind === "m") { // groupe : chaque élément est recollé décalé, à la page affichée
+    const cur = Math.min(Math.max(typeof curPage === "number" ? curPage : 1, 1), pages.length), made = [];
+    for (const e of elClip.list) {
+      const c = JSON.parse(JSON.stringify(e.data)), same = c.page === cur, d = same ? offset : 0;
+      c.page = cur; c.x0 += d; c.x1 += d; c.y0 += d; c.y1 += d; c.z = nextZ();
+      if (c.pts) c.pts = c.pts.map(([x, y]) => [x + d, y + d]);
+      (e.kind === "t" ? textboxes : shapes).push(c); made.push(c); e.data = JSON.parse(JSON.stringify(c));
+    }
+    markDirty(); selected = null; selectedShape = null; redraw(); multi = made; paintMulti();
+    return true;
+  }
   const c = JSON.parse(JSON.stringify(elClip.data));
   const cur = Math.min(Math.max(typeof curPage === "number" ? curPage : c.page, 1), pages.length);
   const samePage = c.page === cur;
   const dx = samePage ? offset : 0, dy = samePage ? offset : 0;
   c.page = cur; c.x0 += dx; c.x1 += dx; c.y0 += dy; c.y1 += dy; c.z = nextZ();
+  if (c.pts) c.pts = c.pts.map(([x, y]) => [x + dx, y + dy]);
   if (elClip.kind === "t") { textboxes.push(c); markDirty(); selected = c; redraw(); }
   else { shapes.push(c); markDirty(); renderShapes(cur - 1); setSelectedShape(c); }
   elClip.data = JSON.parse(JSON.stringify(c)); // le collage suivant se décale encore
   return true;
+}
+function deleteMulti() {
+  const n = multi.length;
+  textboxes = textboxes.filter((t) => !multi.includes(t));
+  shapes = shapes.filter((x) => !multi.includes(x));
+  multi = []; selected = null; selectedShape = null;
+  markDirty(); redraw();
+  notify(`${n} éléments supprimés (Ctrl+Z pour annuler)`, "ok", 2000);
 }
 function duplicateElement() { if (!copyElement()) return false; return pasteElement(); }
 $("fCopy").addEventListener("click", copyElement);
@@ -1808,6 +1886,7 @@ document.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch =
 // Clic ailleurs : on désélectionne et on ferme les fenêtres
 document.addEventListener("mousedown", (ev) => {
   const t = ev.target;
+  if (multi.length && !ev.shiftKey && !t.closest(".ctxbar") && !t.closest(".tb") && !t.closest(".hit")) clearMulti();
   if (!t.closest(".tb") && !t.closest(".ctxbar") && !t.closest(".ni") && selected) {
     const was = selected;
     select(null);
@@ -1826,9 +1905,10 @@ document.addEventListener("keydown", (e) => {
   else if (ctrl && e.key.toLowerCase() === "o") { e.preventDefault(); $("file").click(); }
   else if (ctrl && e.key.toLowerCase() === "z" && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (ctrl && e.key.toLowerCase() === "y" && !typing) { e.preventDefault(); redo(); }
-  else if (ctrl && e.key.toLowerCase() === "d" && layerItem()) { e.preventDefault(); duplicateElement(); }
-  else if (ctrl && e.key.toLowerCase() === "c" && layerItem() && (!typing || (activeEditor() && window.getSelection().isCollapsed))) { e.preventDefault(); copyElement(); }
+  else if (ctrl && e.key.toLowerCase() === "d" && (layerItem() || multi.length > 1)) { e.preventDefault(); duplicateElement(); }
+  else if (ctrl && e.key.toLowerCase() === "c" && (layerItem() || multi.length > 1) && (!typing || (activeEditor() && window.getSelection().isCollapsed))) { e.preventDefault(); copyElement(); }
   else if (ctrl && e.key.toLowerCase() === "v" && elClip && !typing) { e.preventDefault(); pasteElement(); }
+  else if (e.key === "Delete" && !typing && multi.length > 1) { e.preventDefault(); deleteMulti(); }
   else if (e.key === "Delete" && !typing) { selectedShape ? deleteSelectedShape() : selectedHl ? deleteSelectedHl() : deleteSelected(); }
   else if (e.key === "Escape") { closePopovers(); setSelectedShape(null); selectHl(null); }
 });

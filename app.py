@@ -275,13 +275,15 @@ MANAGED = [
     pymupdf.PDF_ANNOT_HIGHLIGHT, pymupdf.PDF_ANNOT_TEXT, pymupdf.PDF_ANNOT_FREE_TEXT,
     pymupdf.PDF_ANNOT_SQUARE, pymupdf.PDF_ANNOT_CIRCLE, pymupdf.PDF_ANNOT_LINE,
     pymupdf.PDF_ANNOT_POLYGON,  # seulement ceux créés ici (les triangles)
+    pymupdf.PDF_ANNOT_INK,      # seulement ceux créés ici (le crayon)
 ]
 # La mise en page est rangée dans chaque annotation sous cette étiquette, pour la retrouver
 # exactement quand on rouvre le PDF.
 TAG = "annotpdf:"
 FONTS = {"helv", "tiro", "cour"} | set(pe.CUSTOM)  # sans empattement, serif, machine à écrire + polices livrées avec le site
 BOX_SHAPES = {"rect", "ellipse", "triangle"}
-SHAPES = BOX_SHAPES | {"line", "arrow"}
+SHAPES = BOX_SHAPES | {"line", "arrow", "pen"}
+MAX_PEN_POINTS = 4000
 DEFAULT_TEXT = {"font": "helv", "size": 14, "color": "#000000", "align": 0, "fill": None, "border": False, "lh": 1.2}
 DEFAULT_HL = "#ffe000"
 RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
@@ -394,8 +396,8 @@ def read_annotations(doc):
                 textboxes.append({"page": n, "x0": r.x0, "y0": r.y0, "x1": r.x1, "y1": r.y1,
                                   "paras": paras, "z": zc, **style})
             else:  # Square, Circle, Line, Polygon
-                if kind == "Polygon" and not (meta and meta.get("kind") == "triangle"):
-                    continue  # un polygone venu d'ailleurs : on n'y touche pas
+                if kind in ("Polygon", "Ink") and not (meta and meta.get("kind") in ("triangle", "pen")):
+                    continue  # un polygone ou un tracé venu d'ailleurs : on n'y touche pas
                 if meta and "rect" in meta:
                     s = dict(meta)
                 else:  # forme créée dans un autre logiciel : on en déduit l'essentiel
@@ -412,9 +414,12 @@ def read_annotations(doc):
                         if a.line_ends and a.line_ends[1]:
                             s["kind"] = "arrow"
                 x0, y0, x1, y1 = s["rect"]
-                shapes.append({"page": n, "kind": s["kind"], "x0": x0, "y0": y0, "x1": x1, "y1": y1,
-                               "stroke": s.get("stroke", "#e03131"), "width": s.get("width", 2),
-                               "fill": s.get("fill"), "z": zc})
+                item = {"page": n, "kind": s["kind"], "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+                        "stroke": s.get("stroke", "#e03131"), "width": s.get("width", 2),
+                        "fill": s.get("fill"), "z": zc}
+                if s["kind"] == "pen":
+                    item["pts"] = s.get("pts") or []
+                shapes.append(item)
     return highlights, notes, textboxes, shapes
 
 
@@ -422,7 +427,7 @@ def clear_managed(doc):
     """Retire les annotations des types gérés (elles seront réécrites depuis le navigateur)."""
     for page in doc:
         for a in list(page.annots(types=MANAGED)):
-            if a.type[1] == "Polygon" and not meta_of(a):
+            if a.type[1] in ("Polygon", "Ink") and not meta_of(a):
                 continue
             page.delete_annot(a)
 
@@ -435,6 +440,19 @@ def add_shape(page, s):
     stroke = safe_hex(s.get("stroke"), "#e03131")
     width = min(max(float(s.get("width", 2)), 0.5), 24)
     fill = safe_hex(s.get("fill"), None) if kind in BOX_SHAPES else None
+    if kind == "pen":  # tracé à main levée : une suite de points
+        pts = [(float(p[0]), float(p[1])) for p in (s.get("pts") or [])[:MAX_PEN_POINTS] if isinstance(p, (list, tuple)) and len(p) >= 2]
+        if len(pts) < 2:
+            return
+        pts = [(round(x, 1), round(y, 1)) for x, y in pts]
+        a = page.add_ink_annot([pts])
+        a.set_colors(stroke=hex_to_rgb(stroke))
+        a.set_border(width=width)
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        a.set_info(subject=TAG + json.dumps({"kind": "pen", "stroke": stroke, "width": width, "fill": None,
+                                             "rect": [min(xs), min(ys), max(xs), max(ys)], "pts": pts}))
+        a.update()
+        return
     x0, y0, x1, y1 = (float(s[k]) for k in ("x0", "y0", "x1", "y1"))
     if kind in BOX_SHAPES:  # on range les coins : x0 < x1 et y0 < y1
         x0, x1, y0, y1 = min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)
