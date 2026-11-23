@@ -17,6 +17,8 @@ RELEASES = [
             "Zoom au pincement (doigts ou pavé tactile) et Ctrl + molette.",
             "Les options d'édition s'affichent dans un panneau à gauche (sur grand écran) au lieu d'une barre en haut.",
             "Menu « Plus » (⋯) : apparence, personnalisation, raccourcis, déconnexion (seulement depuis l'accueil). Nouveau logo.",
+            "Nouveau mode « Dessiner » (touche D) juste à côté de Surligner : trait à main levée avec couleur, épaisseur et gomme (un clic sur un trait l'efface). Il reste aussi dans « Forme ».",
+            "Zone de texte : la poignée du haut suit maintenant la souris (tirer vers le haut agrandit, le bas reste en place), une poignée en bas fait pareil dans l'autre sens, et le petit rond en bas à droite redimensionne tout (largeur + taille du texte).",
             "Crayon : dans « Forme », nouvel outil de dessin à main levée (souris, doigt ou stylet). Le tracé se déplace, se copie, se supprime comme une forme et s'enregistre dans le PDF.",
             "Sélection multiple : Maj + clic ajoute des zones de texte et des formes à la sélection ; Ctrl+C / Ctrl+V / Ctrl+D copient ou dupliquent le groupe, Suppr l'efface (Ctrl+Z annule).",
             "Ouverture d'un document : retour à la dernière page lue ET au zoom que tu aviez, document par document.",

@@ -24,6 +24,8 @@ const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const DEFAULT_PREFS = { theme: "auto", palette: "notion", accent: null, bg: null, surface: null, font: "notion", radius: null, css: "", ui: 1, hl: HL_COLORS[0], zoom: 1.5 };
 let prefs = { ...DEFAULT_PREFS };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem("prefs") || "{}")); } catch (e) {}
+const drawDefaults = { stroke: prefs.drawColor || "#e03131", width: prefs.drawWidth || 3 };
+let eraser = false;
 
 let SCALE = prefs.zoom; // zoom d'affichage. Les annotations sont stockées à l'échelle 1 (= unités PDF).
 
@@ -570,6 +572,17 @@ function updateBars() { // la barre des surlignages s'affiche en mode Surligner,
 }
 $("hDelete").addEventListener("click", deleteSelectedHl);
 
+// ---- Barre « Dessin » : couleur, épaisseur, gomme ----
+$("dStroke").value = drawDefaults.stroke; $("dWidth").value = drawDefaults.width;
+["#e03131", "#1c7ed6", "#2f9e44", "#f08c00", "#212529", "#ffffff"].forEach((c) => {
+  const b = el("button", "sw"); b.style.background = c; b.dataset.color = c; b.title = c; b.setAttribute("aria-label", "Couleur " + c);
+  b.addEventListener("click", () => { $("dStroke").value = c; $("dStroke").dispatchEvent(new Event("input")); });
+  $("dSw").appendChild(b);
+});
+$("dStroke").addEventListener("input", () => { drawDefaults.stroke = $("dStroke").value; prefs.drawColor = drawDefaults.stroke; savePrefs(); document.querySelectorAll("#dSw .sw").forEach((b) => b.classList.toggle("active", b.dataset.color === drawDefaults.stroke)); });
+$("dWidth").addEventListener("input", () => { drawDefaults.width = Math.min(30, Math.max(1, Number($("dWidth").value) || 3)); prefs.drawWidth = drawDefaults.width; savePrefs(); });
+$("dEraser").addEventListener("click", () => { eraser = !eraser; $("dEraser").setAttribute("aria-pressed", String(eraser)); document.body.classList.toggle("eraser", eraser); });
+
 // ====================== 5. Texte riche (gras, italique, souligné, barré) ======================
 // Le texte d'une zone est une liste de paragraphes ; un paragraphe est une liste de « runs » :
 //   { t: "texte", b: 1, i: 1, u: 1, s: 1 }  (b gras, i italique, u souligné, s barré)
@@ -761,13 +774,15 @@ function buildBox(tb, idle = false) {
   const grip = el("div", "tb-grip"); grip.textContent = "✥"; grip.title = "Déplacer";
   const rz = el("div", "tb-resize"); rz.title = "Redimensionner";
   box.append(ed, grip);
-  let edgeL, edgeR, topH;
+  let edgeL, edgeR, topH, botH, corner;
   if (tb.native) box.append(rz);
   else { // zone de texte : barres latérales = largeur du texte, poignée du haut = taille du texte
     edgeL = el("div", "tb-edge l"); edgeL.title = "Largeur de la zone";
     edgeR = el("div", "tb-edge r"); edgeR.title = "Largeur de la zone";
-    topH = el("div", "tb-top"); topH.title = "Glisser vers le haut / le bas : agrandir / réduire le texte";
-    box.append(edgeL, edgeR, topH);
+    topH = el("div", "tb-top"); topH.title = "Glisser vers le haut : agrandir le texte (le bas de la zone reste en place)";
+    botH = el("div", "tb-bottom"); botH.title = "Glisser vers le bas : agrandir le texte (le haut de la zone reste en place)";
+    corner = el("div", "tb-corner"); corner.title = "Redimensionner l'ensemble (largeur et taille du texte)";
+    box.append(edgeL, edgeR, topH, botH, corner);
   }
   boxEls.set(tb, box);
   styleBox(tb);
@@ -792,7 +807,7 @@ function buildBox(tb, idle = false) {
     ["input", "blur"].forEach((evn) => ed.addEventListener(evn, () => { syncBox(tb, box); fitBox(tb); updateCounters(); }));
     dragHandle(grip, tb, "move");
     if (tb.native) dragHandle(rz, tb, "resize");
-    else { dragHandle(edgeL, tb, "left"); dragHandle(edgeR, tb, "right"); dragHandle(topH, tb, "scale"); }
+    else { dragHandle(edgeL, tb, "left"); dragHandle(edgeR, tb, "right"); dragHandle(topH, tb, "top"); dragHandle(botH, tb, "bottom"); dragHandle(corner, tb, "corner"); }
   }
   pages[tb.page - 1].tbLayer.appendChild(box);
   fitBox(tb);
@@ -865,10 +880,15 @@ function dragHandle(handle, tb, kind) {
         tb.x1 = Math.max(o.x1 + dx, o.x0 + 20);
       } else if (kind === "left") {
         tb.x0 = Math.min(o.x0 + dx, o.x1 - 20);
-      } else if (kind === "scale") { // glisser vers le haut : texte plus grand (même largeur de zone)
-        const h0 = Math.max(o.y1 - o.y0, 10);
-        tb.size = Math.round(Math.min(Math.max(o.size * (1 - dy / (h0 + 30)), 6), 200) * 2) / 2;
-        fSize.value = tb.size;
+      } else if (kind === "top" || kind === "bottom") { // la poignée suit la souris : le bord opposé reste en place
+        const h0 = Math.max(o.y1 - o.y0, 10), k = Math.min(Math.max((kind === "top" ? h0 - dy : h0 + dy) / h0, 0.15), 8);
+        tb.size = Math.round(Math.min(Math.max(o.size * k, 6), 200) * 2) / 2; fSize.value = tb.size;
+        styleBox(tb); fitBox(tb);
+        if (kind === "top") { const h = tb.y1 - tb.y0; tb.y1 = o.y1; tb.y0 = o.y1 - h; } else { tb.y0 = o.y0; }
+      } else if (kind === "corner") { // échelle globale : largeur et texte changent dans la même proportion, coin haut-gauche fixe
+        const w0 = Math.max(o.x1 - o.x0, 20), h0 = Math.max(o.y1 - o.y0, 10), k = Math.min(Math.max(1 + (dx * w0 + dy * h0) / (w0 * w0 + h0 * h0), 0.2), 8);
+        tb.x1 = o.x0 + w0 * k; tb.size = Math.round(Math.min(Math.max(o.size * k, 6), 200) * 2) / 2; fSize.value = tb.size;
+        styleBox(tb); fitBox(tb); tb.y0 = o.y0;
       } else {
         tb.x1 = Math.max(o.x1 + dx, o.x0 + 20); tb.y1 = Math.max(o.y1 + dy, o.y0 + 14);
       }
@@ -878,7 +898,7 @@ function dragHandle(handle, tb, kind) {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
       if (tb.native) tb.changed = true;
-      fitBox(tb);
+      if (kind === "top") { const y1 = tb.y1; fitBox(tb); const h = tb.y1 - tb.y0; tb.y1 = y1; tb.y0 = y1 - h; styleBox(tb); } else fitBox(tb);
       markDirty();
       updateSelectionButtons();
     };
@@ -1266,7 +1286,7 @@ function renderShapes(pi) {
     }
     // Zone cliquable plus large que le trait, pour pouvoir attraper la forme facilement
     const hit = shapeGeom(s);
-    hit.setAttribute("class", "hit");
+    hit.setAttribute("class", "hit"); if (s.kind === "pen") hit.setAttribute("data-pen", "1");
     hit.setAttribute("stroke", "rgba(0,0,0,0)");
     hit.setAttribute("stroke-width", Math.max(s.width * SCALE, 12));
     hit.setAttribute("fill", isBoxKind(s.kind) && s.fill ? "rgba(0,0,0,0)" : "none");
@@ -1317,17 +1337,19 @@ function setSelectedShape(s) {
 
 // Dessiner : mode « Forme », puis cliquer-glisser
 function startShape(ev, pi) {
-  if (currentMode() !== "shape" || ev.button !== 0) return;
+  const mode = currentMode();
+  if ((mode !== "shape" && mode !== "draw") || ev.button !== 0) return;
+  if (mode === "draw" && eraser) return; // gomme active : on n'ajoute pas de trait (voir startShapeMove)
   if (ev.target.closest(".tb") || ev.target.closest(".note") || ev.target.closest(".hit") || ev.target.closest(".sh-handle")) return;
   ev.preventDefault();
   const b = pages[pi].div.getBoundingClientRect();
   const pt = (e) => [clamp((e.clientX - b.left) / SCALE, 0, b.width / SCALE), clamp((e.clientY - b.top) / SCALE, 0, b.height / SCALE)];
   const [sx, sy] = pt(ev);
-  const pen = shapeDefaults.kind === "pen";
+  const drawing = mode === "draw", pen = drawing || shapeDefaults.kind === "pen";
   const s = {
-    page: pi + 1, kind: shapeDefaults.kind, x0: sx, y0: sy, x1: sx, y1: sy,
-    stroke: shapeDefaults.stroke, width: shapeDefaults.width,
-    fill: isBoxKind(shapeDefaults.kind) ? shapeDefaults.fill : null, z: nextZ(),
+    page: pi + 1, kind: pen ? "pen" : shapeDefaults.kind, x0: sx, y0: sy, x1: sx, y1: sy,
+    stroke: drawing ? drawDefaults.stroke : shapeDefaults.stroke, width: drawing ? drawDefaults.width : shapeDefaults.width,
+    fill: !pen && isBoxKind(shapeDefaults.kind) ? shapeDefaults.fill : null, z: nextZ(),
   };
   if (pen) s.pts = [[sx, sy]];
   shapes.push(s);
@@ -1350,7 +1372,7 @@ function startShape(ev, pi) {
       return;
     }
     normShape(s);
-    setSelectedShape(s);
+    if (drawing) { renderShapes(pi); } else setSelectedShape(s); // en dessin on enchaîne les traits sans sélectionner
     markDirty();
     updateCounters();
   };
@@ -1365,6 +1387,10 @@ function startShapeMove(ev, s) {
   if (ev.button !== 0) return;
   ev.preventDefault(); ev.stopPropagation();
   if (ev.shiftKey) { toggleMulti(s); return; }
+  if (currentMode() === "draw") { // gomme : le clic sur un trait l'efface
+    if (eraser && s.kind === "pen") { shapes = shapes.filter((x) => x !== s); if (selectedShape === s) selectedShape = null; renderShapes(s.page - 1); markDirty(); updateCounters(); }
+    return;
+  }
   setSelectedShape(s);
   const sx = ev.clientX, sy = ev.clientY;
   const o = { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 }, op = s.pts ? s.pts.map((p) => [p[0], p[1]]) : null;
@@ -1409,7 +1435,7 @@ function startHandleDrag(ev, s, kx, ky) {
 const sStroke = $("sStroke"), sWidth = $("sWidth"), sFillOn = $("sFillOn"), sFill = $("sFill");
 const kindBtns = document.querySelectorAll("[data-kind]");
 
-function penTouch() { document.body.classList.toggle("draw-pen", shapeDefaults.kind === "pen" && currentMode() === "shape"); }
+function penTouch() { document.body.classList.toggle("draw-pen", currentMode() === "draw" || (shapeDefaults.kind === "pen" && currentMode() === "shape")); }
 function syncShapeControls(s) {
   penTouch();
   kindBtns.forEach((b) => b.classList.toggle("active", b.dataset.kind === shapeDefaults.kind)); // l'outil choisi
@@ -1786,6 +1812,7 @@ function applyMode() {
   updateBars();                                // chaque barre n'apparaît que dans son mode
   $("formatbar").hidden = !(m === "text" || m === "native");
   $("shapebar").hidden = m !== "shape";
+  $("drawbar").hidden = m !== "draw";
   $("fTitle").textContent = m === "native" ? "Contenu du PDF" : "Texte";
   // en quittant le mode « Éditer le PDF », les paragraphes non touchés redeviennent le PDF tout simple
   if (selected && selected.native && !selected.changed) selected.active = false;

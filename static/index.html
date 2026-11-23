@@ -92,6 +92,8 @@
           <span><svg class="ic"><use href="#i-cursor"/></svg></span></label>
         <label class="seg" title="Surligner du texte (H)"><input type="radio" name="mode" value="highlight">
           <span><svg class="ic"><use href="#i-marker"/></svg></span></label>
+        <label class="seg" title="Dessiner à main levée sur le document (D)"><input type="radio" name="mode" value="draw">
+          <span><svg class="ic"><use href="#i-pen"/></svg></span></label>
         <label class="seg" title="Poser une note (N)"><input type="radio" name="mode" value="note">
           <span><svg class="ic"><use href="#i-note"/></svg></span></label>
         <label class="seg" title="Tracer une zone de texte (T)"><input type="radio" name="mode" value="text">
@@ -211,6 +213,17 @@
       <span class="sep"></span>
       <button id="hDelete" class="tool danger" disabled title="Supprimer le surlignage sélectionné (Suppr)" aria-label="Supprimer le surlignage"><svg class="ic"><use href="#i-trash"/></svg></button>
       <span class="hint">Cliquez sur un surlignage pour le recolorer ou le supprimer.</span>
+    </div>
+
+    <!-- Barre : dessin à main levée (même famille que le surlignage) -->
+    <div class="ctxbar" id="drawbar" hidden>
+      <span class="ctxtitle">Dessin</span>
+      <div class="swatches" id="dSw"></div>
+      <span class="sep"></span>
+      <input type="color" id="dStroke" value="#e03131" title="Couleur du trait">
+      <input type="number" id="dWidth" min="1" max="30" step="1" value="3" title="Épaisseur du trait">
+      <button class="tool toggle" id="dEraser" aria-pressed="false" title="Gomme : cliquer sur un trait pour l'effacer"><svg class="ic"><use href="#i-trash"/></svg></button>
+      <span class="hint">Maintenez le bouton (ou le doigt) et dessinez. Pour déplacer ou supprimer un trait, repassez en Sélection.</span>
     </div>
 
     <!-- Barre : mise en page du texte -->

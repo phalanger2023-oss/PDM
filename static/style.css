@@ -387,14 +387,14 @@ body.has-thumbs #viewer { margin-left: 150px; }
 .textLayer span, .textLayer br { position: absolute; white-space: pre; color: transparent; transform-origin: 0 0; cursor: text; }
 .textLayer ::selection { background: color-mix(in srgb, var(--sel) 35%, transparent); }
 body[data-mode="note"] .textLayer span { cursor: crosshair; }
-body[data-mode="text"] .page, body[data-mode="shape"] .page { cursor: crosshair; }
-body[data-mode="text"] .textLayer, body[data-mode="shape"] .textLayer { user-select: none; }
+body[data-mode="text"] .page, body[data-mode="shape"] .page, body[data-mode="draw"] .page { cursor: crosshair; }
+body[data-mode="text"] .textLayer, body[data-mode="shape"] .textLayer, body[data-mode="draw"] .textLayer { user-select: none; }
 
 /* Formes (dessinées en SVG au-dessus du texte) */
 .shape-layer { width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .shape-layer .vis { pointer-events: none; }
 .shape-layer .hit { pointer-events: none; }
-body[data-mode="select"] .shape-layer .hit, body[data-mode="shape"] .shape-layer .hit { pointer-events: visiblePainted; cursor: move; }
+body[data-mode="select"] .shape-layer .hit, body[data-mode="shape"] .shape-layer .hit, body.eraser[data-mode="draw"] .shape-layer .hit[data-pen] { pointer-events: visiblePainted; cursor: move; }
 .sh-box { position: absolute; border: 1px dashed var(--sel); pointer-events: none; }
 .sh-handle { position: absolute; width: 11px; height: 11px; margin: -6px 0 0 -6px; background: var(--sel); border: 1px solid #fff; border-radius: 2px; pointer-events: auto; cursor: nwse-resize; touch-action: none; }
 .sh-handle.nesw { cursor: nesw-resize; }
@@ -553,8 +553,8 @@ details.rel > summary { cursor: pointer; display: flex; align-items: baseline; g
 
 /* ---------- Zone de texte façon Canva : barres de largeur + poignée de taille ---------- */
 .tb-layer { z-index: 0; }
-.tb-edge, .tb-top { display: none; position: absolute; background: var(--sel); touch-action: none; }
-.tb.selected .tb-edge, .tb.selected .tb-top { display: block; }
+.tb-edge, .tb-top, .tb-bottom, .tb-corner { display: none; position: absolute; background: var(--sel); touch-action: none; }
+.tb.selected .tb-edge, .tb.selected .tb-top, .tb.selected .tb-bottom, .tb.selected .tb-corner { display: block; }
 .tb-edge { top: 50%; width: 6px; height: 28px; margin-top: -14px; border-radius: 3px; cursor: ew-resize; border: 1px solid #fff; }
 .tb-edge.l { left: -4px; } .tb-edge.r { right: -4px; }
 .tb-top { top: -6px; left: 50%; width: 30px; height: 7px; margin-left: -15px; border-radius: 4px; cursor: ns-resize; border: 1px solid #fff; }
@@ -623,3 +623,8 @@ body.draw-pen .page { touch-action: none; }
 /* Sélection multiple (Maj + clic) */
 .tb.multi { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .sh-multi { border-color: var(--accent); }
+
+/* Poignées de la zone de texte : bas (même effet que le haut), rond d'angle = échelle globale */
+.tb-bottom { bottom: -6px; left: 50%; width: 30px; height: 7px; margin-left: -15px; border-radius: 4px; cursor: ns-resize; border: 1px solid #fff; }
+.tb-corner { right: -8px; bottom: -8px; width: 16px; height: 16px; border-radius: 50%; cursor: nwse-resize; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+body.phone .tb-bottom { height: 16px; width: 56px; margin-left: -28px; bottom: -14px; } body.phone .tb-corner { width: 28px; height: 28px; right: -14px; bottom: -14px; }

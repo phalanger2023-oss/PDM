@@ -291,7 +291,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (typing || ctrl || e.altKey) return;
-  const tools = { v: "select", h: "highlight", n: "note", t: "text", f: "shape", e: "native" };
+  const tools = { v: "select", h: "highlight", d: "draw", n: "note", t: "text", f: "shape", e: "native" };
   const k = e.key.toLowerCase();
   if (tools[k]) { e.preventDefault(); setMode(tools[k]); }
   else if (k === "p") toggleThumbs();
