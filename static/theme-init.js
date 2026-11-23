@@ -53,6 +53,14 @@ function applyAppearance(p) {
   set("--accent", accent);
   set("--accent-contrast", accent ? contrastOn(accent) : null);
 
+  // Icône de l'onglet : la même feuille, dans la couleur d'accent (sans fond)
+  const fav = document.querySelector('link[rel="icon"]');
+  if (fav) {
+    const col = accent || (dark ? "#ebebe9" : "#37352f");
+    fav.type = "image/svg+xml";
+    fav.href = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 14h6"/></svg>`);
+  }
+
   // Couleur des contours sur la page PDF (toujours blanche) : l'accent s'il est assez foncé, sinon une couleur sûre
   const accentEff = accent || (dark ? "#ebebe9" : "#37352f");
   const sel = luminance(accentEff) <= 0.62 ? accentEff : (dark ? "#e07b39" : "#37352f");
