@@ -599,3 +599,15 @@ details.rel > summary { cursor: pointer; display: flex; align-items: baseline; g
 body[data-view="doc"] .menu-account, body[data-view="text"] .menu-account { display: none !important; } /* pas de déconnexion depuis une page d'édition */
 .logo-btn img { display: block; border-radius: 6px; }
 .brand-mark img { display: block; margin: 0 auto; border-radius: 16px; box-shadow: var(--shadow); }
+
+/* ---------- Mode téléphone : tactile d'abord ---------- */
+body.phone .tool, body.phone .seg > span, body.phone .seg-btn, body.phone .btn { min-width: 44px; min-height: 44px; }
+body.phone input, body.phone select, body.phone textarea { font-size: 16px; }
+body.phone .menu-item { min-height: 48px; }
+body.phone .topbar { position: sticky; top: 0; z-index: 20; }
+body.phone .ctxbar:not(#findbar):not([hidden]) { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; z-index: 25; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; border-top: 1px solid var(--border); border-right: 0; padding: 8px; max-height: none; }
+body.phone .ctxbar:not(#findbar):not([hidden]) .plabel, body.phone .ctxbar:not(#findbar):not([hidden]) .grouplabel, body.phone .ctxbar:not(#findbar):not([hidden]) .sep, body.phone .ctxbar:not(#findbar):not([hidden]) .hint { display: none; }
+body.phone .ctxbar:not(#findbar):not([hidden]) select { width: auto; min-width: 130px; } body.phone .ctxbar:not(#findbar):not([hidden]) input[type=number] { width: 70px; } body.phone .ctxbar:not(#findbar):not([hidden]) input[type=color] { width: 44px; height: 44px; }
+body.phone #viewer, body.phone.has-thumbs #viewer, body:has(.ctxbar:not(#findbar):not([hidden])).phone #viewer { margin-left: 0 !important; padding: 8px 4px 90px; }
+body.phone .tb-edge { width: 14px; height: 44px; margin-top: -22px; } body.phone .tb-edge.l { left: -9px; } body.phone .tb-edge.r { right: -9px; } body.phone .tb-top { height: 16px; width: 56px; margin-left: -28px; top: -14px; } body.phone .tb-grip { width: 34px; height: 30px; top: -32px; font-size: 18px; }
+body.phone .ctxbar:not(#findbar):not([hidden]) { height: 64px; align-items: center; align-content: center; box-sizing: border-box; }

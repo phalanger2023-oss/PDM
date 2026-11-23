@@ -1706,6 +1706,20 @@ function setProgress(n, total) {
 
 // ====================== 11. Fenêtres : réglages et aide ======================
 const settings = $("settings");
+// Mode téléphone : « auto » (écran étroit ou tactile), « on » ou « off » ; réglage propre à l'appareil
+function applyPhone() {
+  let pref = "auto"; try { pref = localStorage.getItem("pdm_phone") || "auto"; } catch (e) {}
+  const on = pref === "on" || (pref === "auto" && (matchMedia("(max-width: 760px)").matches || (matchMedia("(pointer: coarse)").matches && innerWidth < 1000)));
+  document.body.classList.toggle("phone", on);
+  $("phoneLabel").textContent = "Mode téléphone : " + { auto: "automatique", on: "activé", off: "désactivé" }[pref];
+}
+$("phoneBtn").addEventListener("click", () => {
+  let pref = "auto"; try { pref = localStorage.getItem("pdm_phone") || "auto"; } catch (e) {}
+  const next = { auto: "on", on: "off", off: "auto" }[pref];
+  try { localStorage.setItem("pdm_phone", next); } catch (e) {}
+  applyPhone();
+});
+window.addEventListener("resize", applyPhone);
 function closePopovers() { settings.hidden = true; const h = $("help"); if (h) h.hidden = true; const m = $("more"); if (m) m.hidden = true; }
 $("moreBtn").addEventListener("click", () => { const open = $("more").hidden; closePopovers(); $("more").hidden = !open; });
 $("settingsBtn").addEventListener("click", () => { const open = settings.hidden; closePopovers(); settings.hidden = !open; });
@@ -1828,6 +1842,7 @@ $("logout").addEventListener("click", async () => {
 });
 
 applyPrefs();
+applyPhone();
 applyMode();
 syncControls(defaults);
 syncShapeControls(shapeDefaults);

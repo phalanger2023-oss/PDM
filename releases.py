@@ -17,6 +17,7 @@ RELEASES = [
             "Zoom au pincement (doigts ou pavé tactile) et Ctrl + molette.",
             "Les options d'édition s'affichent dans un panneau à gauche (sur grand écran) au lieu d'une barre en haut.",
             "Menu « Plus » (⋯) : apparence, personnalisation, raccourcis, déconnexion (seulement depuis l'accueil). Nouveau logo.",
+            "Mode téléphone (menu ⋯ : automatique / activé / désactivé) : boutons plus grands, options d'édition en bandeau défilant en bas de l'écran, poignées de zone de texte agrandies pour le doigt.",
         ],
         "ameliorations": [
             "Importer un Word (.docx) garde maintenant les couleurs, tailles, polices, surlignages, l'alignement, les tableaux (cellules fusionnées), les listes et les images.",
