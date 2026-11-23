@@ -460,6 +460,7 @@ body[data-mode="native"] .annot-only { display: none !important; }
 #radius { width: 120px; accent-color: var(--accent); }
 
 /* Notes de version */
+.credit-line { margin: 8px 0; } .credit-quote { margin: 16px 0 4px; padding: 4px 14px; border-left: 3px solid var(--border); font-style: italic; } .credit-quote footer { font-style: normal; margin-top: 4px; font-size: .85em; }
 .rel-foot { text-align: center; margin: 28px 0 8px; }
 .rel-link { background: none; border: 0; color: var(--muted); font: inherit; font-size: .85em; cursor: pointer; padding: 4px 8px; border-radius: var(--radius); }
 .rel-link:hover { background: var(--hover); color: var(--text); }
@@ -641,7 +642,7 @@ body.phone .tb-bottom { height: 16px; width: 56px; margin-left: -28px; bottom: -
 body.phone .colfav-btn { font-size: 20px; padding: 6px 8px; }
 
 /* Accueil : logo DeepWell en grand, très pâle, comme un fond d'écran (logo choisi dans DeepWell, sinon static/home-bg.svg) */
-body[data-view="home"]::before { content: ""; position: fixed; right: -6vmin; bottom: -8vmin; width: 78vmin; height: 78vmin; background: url(/home-logo.svg) center / contain no-repeat; opacity: .07; transform: rotate(-9deg); pointer-events: none; z-index: 0; }
+body[data-view="home"]::before { content: ""; position: fixed; left: 50%; top: 50%; width: 78vmin; height: 78vmin; margin: -39vmin 0 0 -39vmin; background: url(/home-logo.svg) center / contain no-repeat; opacity: .07; pointer-events: none; z-index: 0; }
 body[data-view="home"] .home { position: relative; z-index: 1; }
 @media (prefers-color-scheme: dark) { body[data-view="home"]::before { opacity: .1; } }
 

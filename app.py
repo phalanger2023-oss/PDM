@@ -302,7 +302,7 @@ def require_login():
         if origin and urlparse(origin).netloc != request.host:
             abort(403)
     p = request.path
-    if p in ("/api/integration/ping", "/api/integration/docs", "/api/integration/logo", "/api/integration/link"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
+    if p in ("/api/integration/ping", "/api/integration/docs", "/api/integration/logo", "/api/integration/link", "/api/integration/credits"):  # DeepWell (de serveur à serveur) : clé secrète au lieu du cookie
         return None if _key_ok(request.remote_addr or "?") else (jsonify(error="Clé d'intégration refusée"), 401)
     if p in ("/login", "/api/login", "/api/me", "/healthz", "/sso/callback") or p.startswith("/static/"):
         return None
@@ -1283,6 +1283,29 @@ def integration_key_get():
 def integration_key_renew():
     """Nouvelle clé : l'ancienne cesse de fonctionner (à recopier dans DeepWell)."""
     return jsonify(key=integration_key(new=True))
+
+
+CREDITS_FILE = ROOT_DOCS / ".credits.json"  # crédits des notes de version, écrits dans DeepWell et copiés ici
+
+
+@app.post("/api/integration/credits")
+def integration_credits():
+    c = (request.get_json(silent=True) or {}).get("credits")
+    if not isinstance(c, dict):
+        return jsonify(error="Crédits invalides"), 400
+    t = lambda v, n: v.strip()[:n] if isinstance(v, str) else ""
+    out = {"lines": [{"label": t(l.get("label"), 60), "value": t(l.get("value"), 300)} for l in (c.get("lines") or [])[:20] if isinstance(l, dict)],
+           "quote": t(c.get("quote"), 500), "quote_author": t(c.get("quote_author"), 100)}
+    CREDITS_FILE.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    return jsonify(ok=True)
+
+
+@app.get("/api/credits")
+def api_credits():
+    try:
+        return jsonify(json.loads(CREDITS_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return jsonify(lines=[], quote="", quote_author="")
 
 
 @app.post("/api/integration/link")
