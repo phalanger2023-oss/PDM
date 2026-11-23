@@ -628,3 +628,14 @@ body.draw-pen .page { touch-action: none; }
 .tb-bottom { bottom: -6px; left: 50%; width: 30px; height: 7px; margin-left: -15px; border-radius: 4px; cursor: ns-resize; border: 1px solid #fff; }
 .tb-corner { right: -8px; bottom: -8px; width: 16px; height: 16px; border-radius: 50%; cursor: nwse-resize; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 body.phone .tb-bottom { height: 16px; width: 56px; margin-left: -28px; bottom: -14px; } body.phone .tb-corner { width: 28px; height: 28px; right: -14px; bottom: -14px; }
+
+/* Couleurs favorites (colorfav.js) */
+.colfav-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 3px; border-radius: 4px; }
+.colfav-btn:hover { background: var(--hover); color: var(--fg); } .colfav-star.on { color: #f5b301; }
+.colfav-pop { position: fixed; z-index: 400; background: var(--surface, #fff); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.22); padding: 10px 12px; max-width: 260px; }
+.colfav-head { font-size: 12px; color: var(--muted); margin-bottom: 8px; } .colfav-empty { font-size: 13px; color: var(--muted); max-width: 200px; }
+.colfav-grid { display: grid; grid-template-columns: repeat(6, 28px); gap: 8px; }
+.colfav-cell { position: relative; display: inline-flex; } .colfav-cell .sw { width: 26px; height: 26px; }
+.colfav-x { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; border: 0; background: var(--fg); color: var(--surface, #fff); font-size: 12px; line-height: 14px; padding: 0; cursor: pointer; display: none; }
+.colfav-cell:hover .colfav-x { display: block; } body.phone .colfav-x { display: block; }
+body.phone .colfav-btn { font-size: 20px; padding: 6px 8px; }

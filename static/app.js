@@ -1615,11 +1615,13 @@ function restore(snap) {
   scheduleAutosave(); // annuler / rétablir est aussi un changement à enregistrer
 }
 function undo() {
-  if (commitTimer) commitNow(); // on prend d'abord en compte le dernier changement en attente
+  syncTextFromDom(); // texte tapé dans une zone : pris en compte avant de revenir en arrière
+  if (commitTimer) commitNow(); else commitNow(); // on prend d'abord en compte le dernier changement en attente
   if (undoIdx <= 0) return;
   restore(undoStack[--undoIdx]);
 }
 function redo() {
+  syncTextFromDom();
   if (commitTimer) commitNow();
   if (undoIdx >= undoStack.length - 1) return;
   restore(undoStack[++undoIdx]);
@@ -1829,14 +1831,19 @@ function copyElement() {
   if (multi.length > 1) {
     syncTextFromDom();
     elClip = { kind: "m", list: multi.map((m) => ({ kind: shapes.includes(m) ? "s" : "t", data: JSON.parse(JSON.stringify(m)) })) };
+    try { navigator.clipboard.writeText(""); } catch (e) {}
     notify(`${multi.length} éléments copiés`, "ok", 1500);
     return true;
   }
-  const it = layerItem();
+  const it = copyItem();
   if (!it) return false;
   syncTextFromDom();
-  elClip = { kind: it === selectedShape ? "s" : "t", data: JSON.parse(JSON.stringify(it)) };
-  try { if (elClip.kind === "t") navigator.clipboard.writeText(plainOf(it.paras)); } catch (e) {}
+  if (it.native) { // paragraphe du PDF : copié comme une nouvelle zone de texte (l'original reste en place)
+    const c = { page: it.page, x0: it.x0, y0: it.y0, x1: it.x1, y1: it.y1, ...defaults, paras: JSON.parse(JSON.stringify(it.paras)), z: nextZ() };
+    for (const k of ["font", "size", "color", "align"]) if (it[k] !== undefined && it[k] !== null) c[k] = it[k];
+    elClip = { kind: "t", data: c };
+  } else elClip = { kind: it === selectedShape ? "s" : "t", data: JSON.parse(JSON.stringify(it)) };
+  try { navigator.clipboard.writeText(elClip.kind === "t" ? plainOf(elClip.data.paras) : ""); } catch (e) {}
   notify("Élément copié", "ok", 1500);
   return true;
 }
@@ -1925,19 +1932,50 @@ document.addEventListener("mousedown", (ev) => {
   if (!t.closest(".popwrap")) closePopovers();
 });
 
+// ---- Raccourcis clavier : Ctrl+Z / Y (annuler, rétablir), Ctrl+C / X / V / D, Suppr ----
+const inDoc = () => document.body.dataset.view === "doc" && !!pdfDoc;
+// Champs où Ctrl+Z, Ctrl+C… gardent leur sens natif (texte tapé dans une note, un champ, l'éditeur de texte).
+// Les zones de texte du document (.tb) ne comptent pas : Ctrl+Z y annule l'ensemble du travail, frappe comprise.
+function ownsText(t) {
+  if (t.isContentEditable) return !t.closest(".tb");
+  if (t.tagName === "TEXTAREA") return true;
+  if (t.tagName === "INPUT") return /^(text|search|email|url|tel|number|password|)$/.test(t.type);
+  return false;
+}
+const hasTextSelection = () => { const s = window.getSelection(); return !!s && !s.isCollapsed; };
+const copyItem = () => layerItem() || (selected && selected.native && !selected.deleted ? selected : null);
+function cutElement() {
+  if (!copyElement()) return false;
+  if (multi.length > 1) deleteMulti(); else if (selectedShape) deleteSelectedShape(); else deleteSelectedBox();
+  return true;
+}
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
-  const ctrl = e.ctrlKey || e.metaKey;
-  if (ctrl && e.key.toLowerCase() === "s") { e.preventDefault(); forceSave(); }
-  else if (ctrl && e.key.toLowerCase() === "o") { e.preventDefault(); $("file").click(); }
-  else if (ctrl && e.key.toLowerCase() === "z" && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-  else if (ctrl && e.key.toLowerCase() === "y" && !typing) { e.preventDefault(); redo(); }
-  else if (ctrl && e.key.toLowerCase() === "d" && (layerItem() || multi.length > 1)) { e.preventDefault(); duplicateElement(); }
-  else if (ctrl && e.key.toLowerCase() === "c" && (layerItem() || multi.length > 1) && (!typing || (activeEditor() && window.getSelection().isCollapsed))) { e.preventDefault(); copyElement(); }
-  else if (ctrl && e.key.toLowerCase() === "v" && elClip && !typing) { e.preventDefault(); pasteElement(); }
-  else if (e.key === "Delete" && !typing && multi.length > 1) { e.preventDefault(); deleteMulti(); }
+  const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (ctrl && key === "s") { e.preventDefault(); forceSave(); }
+  else if (ctrl && key === "o") { e.preventDefault(); $("file").click(); }
+  else if (ctrl && (key === "z" || key === "y") && inDoc() && !ownsText(e.target)) { e.preventDefault(); (key === "y" || e.shiftKey) ? redo() : undo(); }
+  else if (ctrl && key === "d" && inDoc() && !ownsText(e.target) && (copyItem() || multi.length > 1)) { e.preventDefault(); duplicateElement(); }
+  else if (ctrl && (key === "c" || key === "x") && inDoc() && !hasTextSelection() && !ownsText(e.target) && (copyItem() || multi.length > 1)) { e.preventDefault(); key === "c" ? copyElement() : cutElement(); }
+  else if (ctrl && key === "x" && inDoc() && e.target.closest?.(".tb") && !hasTextSelection() && copyItem()) { e.preventDefault(); cutElement(); }
+  else if (e.key === "Delete" && !typing && inDoc() && multi.length > 1) { e.preventDefault(); deleteMulti(); }
   else if (e.key === "Delete" && !typing) { selectedShape ? deleteSelectedShape() : selectedHl ? deleteSelectedHl() : deleteSelected(); }
   else if (e.key === "Escape") { closePopovers(); setSelectedShape(null); selectHl(null); }
+});
+// Ctrl+V : élément copié dans le document (même avec du texte dans le presse-papiers), sinon texte venu d'ailleurs → nouvelle zone de texte
+document.addEventListener("paste", (e) => {
+  if (!inDoc() || ownsText(e.target)) return;
+  const text = (e.clipboardData?.getData("text/plain") || "").replace(/\r/g, "");
+  const mine = elClip && (!text || (elClip.kind === "t" && plainOf(elClip.data.paras) === text));
+  if (mine) { e.preventDefault(); pasteElement(); return; }
+  if (!text.trim()) return;
+  e.preventDefault();
+  const cur = Math.min(Math.max(typeof curPage === "number" ? curPage : 1, 1), pages.length);
+  const top = Math.max(0, (window.scrollY - pages[cur - 1].div.offsetTop) / SCALE) + 40;
+  const lines = text.split("\n"), wide = Math.min(Math.max(...lines.map((l) => l.length)) * defaults.size * 0.55 + 12, 420);
+  const tb = { page: cur, x0: 50, y0: top, x1: 50 + Math.max(wide, 80), y1: top + defaults.size * 1.4 * lines.length, paras: lines.map((l) => (l ? [{ t: l }] : [])), ...defaults, z: nextZ() };
+  textboxes.push(tb); selected = tb; markDirty(); redraw();
+  notify("Texte collé dans une nouvelle zone", "ok", 1800);
 });
 
 // Bouton « Se déconnecter » : visible seulement si le site demande une connexion
