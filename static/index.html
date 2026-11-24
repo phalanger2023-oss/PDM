@@ -141,6 +141,9 @@
           <button id="theme" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-moon"/></svg><span>Basculer clair / sombre</span></button>
           <button id="settingsBtn" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-gear"/></svg><span>Personnaliser l'interface…</span></button>
           <button id="phoneBtn" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-phone"/></svg><span id="phoneLabel">Mode téléphone : auto</span></button>
+          <div class="menu-title">Sauvegarde</div>
+          <a id="backupBtn" class="menu-item" role="menuitem" href="/api/backup.zip" download><svg class="ic"><use href="#i-download"/></svg><span>Télécharger une sauvegarde (zip)</span></a>
+          <div class="menu-title" id="backupInfo" style="text-transform:none;letter-spacing:0">Copie automatique chaque jour (7 jours gardés)</div>
           <div class="menu-title">Aide</div>
           <button id="helpBtn" class="menu-item" role="menuitem"><svg class="ic"><use href="#i-help"/></svg><span>Raccourcis clavier</span></button>
           <div class="menu-title menu-account">Compte</div>
@@ -207,6 +210,16 @@
     </div>
 
     <!-- Barre : surlignage (couleurs) -->
+    <!-- Calques : sur la ligne du bas de la barre du haut (zones de texte et formes se superposent) -->
+    <div class="layerline doc-only" id="layerline" role="group" aria-label="Calques">
+      <span class="grouplabel">Calques</span>
+      <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan" disabled><svg class="ic"><use href="#i-layer-front"/></svg></button>
+      <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer" disabled><svg class="ic"><use href="#i-chev-up"/></svg></button>
+      <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer" disabled><svg class="ic"><use href="#i-chev-down"/></svg></button>
+      <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan" disabled><svg class="ic"><use href="#i-layer-back"/></svg></button>
+      <span class="hint" id="layerHint">Sélectionnez une zone de texte ou une forme pour changer son plan.</span>
+    </div>
+
     <div class="ctxbar" id="hlbar" hidden>
       <span class="ctxtitle">Surlignage</span>
       <div class="swatches" id="hlSw"></div>
@@ -268,13 +281,6 @@
       <input class="annot-only" type="color" id="fFill" value="#ffffcc" title="Couleur du fond">
       <button class="annot-only tool toggle" id="fBorder" aria-pressed="false" title="Cadre (couleur du texte)"><svg class="ic"><use href="#i-frame"/></svg></button>
       <span class="annot-only sep"></span>
-      <div class="annot-only layerbtns" role="group" aria-label="Calques">
-        <span class="grouplabel">Calques</span>
-        <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan"><svg class="ic"><use href="#i-layer-front"/></svg></button>
-        <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer"><svg class="ic"><use href="#i-chev-up"/></svg></button>
-        <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer"><svg class="ic"><use href="#i-chev-down"/></svg></button>
-        <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan"><svg class="ic"><use href="#i-layer-back"/></svg></button>
-      </div>
       <div class="annot-only layerbtns" role="group" aria-label="Copier-coller">
         <button class="tool" id="fCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg></button>
         <button class="tool" id="fPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg></button>
@@ -303,13 +309,6 @@
       <button class="tool toggle" id="sFillOn" aria-pressed="false" title="Remplissage (rectangle, ellipse, triangle)"><svg class="ic"><use href="#i-fill"/></svg></button>
       <input type="color" id="sFill" value="#ffec99" title="Couleur du remplissage">
       <span class="sep"></span>
-      <div class="layerbtns" role="group" aria-label="Calques">
-        <span class="grouplabel">Calques</span>
-        <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan"><svg class="ic"><use href="#i-layer-front"/></svg></button>
-        <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer"><svg class="ic"><use href="#i-chev-up"/></svg></button>
-        <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer"><svg class="ic"><use href="#i-chev-down"/></svg></button>
-        <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan"><svg class="ic"><use href="#i-layer-back"/></svg></button>
-      </div>
       <div class="layerbtns" role="group" aria-label="Copier-coller">
         <button class="tool" id="sCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg></button>
         <button class="tool" id="sPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg></button>

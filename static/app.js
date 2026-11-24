@@ -468,8 +468,8 @@ function setZoom(v) {
   try { if (docName) localStorage.setItem("lastzoom:" + docName, String(v)); } catch (e) {}
   return renderPages();
 }
-$("zoomIn").addEventListener("click", () => { const v = ZOOM_STEPS.find((z) => z > SCALE + 0.01); if (v) setZoom(v); });
-$("zoomOut").addEventListener("click", () => { const v = [...ZOOM_STEPS].reverse().find((z) => z < SCALE - 0.01); if (v) setZoom(v); });
+$("zoomIn").addEventListener("click", () => { const base = zoomTarget || SCALE, v = ZOOM_STEPS.find((z) => z > base + 0.01); if (v) zoomBy(v / base); });
+$("zoomOut").addEventListener("click", () => { const base = zoomTarget || SCALE, v = [...ZOOM_STEPS].reverse().find((z) => z < base - 0.01); if (v) zoomBy(v / base); });
 
 // ====================== 3. Surligner ======================
 document.addEventListener("mouseup", () => {
@@ -707,9 +707,16 @@ function moveLayer(how) {
     if (!o) return;
     [it.z, o.z] = [o.z, it.z];
   }
+  [...textboxes, ...shapes].sort((a, b) => a.z - b.z).forEach((x, k) => { x.z = k + 1; }); // plans 1, 2, 3… (jamais 0 : ce serait « sans plan »)
   markDirty();
   if (it === selectedShape) renderShapes(it.page - 1); else redraw();
 }
+function syncLayerline() {
+  const has = !!layerItem();
+  document.querySelectorAll("#layerline [data-layer]").forEach((b) => { b.disabled = !has; });
+  const hint = document.getElementById("layerHint"); if (hint) hint.hidden = has;
+}
+["mouseup", "keyup", "click", "touchend"].forEach((ev) => document.addEventListener(ev, () => setTimeout(syncLayerline, 0)));
 document.querySelectorAll("[data-layer]").forEach((b) => {
   b.addEventListener("mousedown", (e) => e.preventDefault());
   b.addEventListener("click", () => moveLayer(b.dataset.layer));
@@ -1889,21 +1896,26 @@ $("sDup").addEventListener("click", duplicateElement);
 
 // ---- Zoom : pincement au doigt, pincement du pavé tactile (Ctrl + molette), Ctrl + molette ----
 let zoomTarget = null, zoomTimer = null;
-function zoomBy(factor) {
+/** Zoom fluide : pendant le geste, la page est simplement agrandie à l'écran (transformation, sans rien redessiner) ; le vrai rendu net n'est refait qu'une fois le geste fini. */
+function zoomBy(factor, cx = innerWidth / 2, cy = innerHeight / 2) {
   zoomTarget = clamp((zoomTarget || SCALE) * factor, 0.4, 4);
+  const view = $("viewer"), rect = view.getBoundingClientRect(), f = zoomTarget / SCALE;
+  if (!view.dataset.zoomOrigin) view.dataset.zoomOrigin = `${cx - rect.left}px ${cy - rect.top}px`; // le point sous le doigt / curseur reste en place pendant tout le geste
+  view.style.transformOrigin = view.dataset.zoomOrigin; view.style.transform = `scale(${f})`; view.style.willChange = "transform";
   clearTimeout(zoomTimer);
   zoomTimer = setTimeout(async () => {
     const v = Math.round(zoomTarget * 100) / 100; zoomTarget = null;
-    if (Math.abs(v - SCALE) < 0.01) return;
+    const end = () => { view.style.transform = ""; view.style.transformOrigin = ""; view.style.willChange = ""; delete view.dataset.zoomOrigin; };
+    if (Math.abs(v - SCALE) < 0.01) return end();
     const doc = document.documentElement, ratio = (window.scrollY + innerHeight / 2) / Math.max(doc.scrollHeight, 1);
-    await setZoom(v);
+    await setZoom(v); end();
     window.scrollTo(window.scrollX, ratio * doc.scrollHeight - innerHeight / 2);
-  }, 140);
+  }, 220);
 }
 window.addEventListener("wheel", (e) => {
   if (!e.ctrlKey || document.body.dataset.view !== "doc") return;
   e.preventDefault(); // sinon le navigateur zoome toute la page
-  zoomBy(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.01)));
+  zoomBy(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.01)), e.clientX, e.clientY);
 }, { passive: false });
 let pinch = null;
 const tdist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -1912,7 +1924,7 @@ document.addEventListener("touchmove", (e) => {
   if (!pinch || e.touches.length !== 2) return;
   e.preventDefault();
   const d = tdist(e.touches);
-  zoomBy(d / pinch);
+  zoomBy(d / pinch, (e.touches[0].clientX + e.touches[1].clientX) / 2, (e.touches[0].clientY + e.touches[1].clientY) / 2);
   pinch = d;
 }, { passive: false });
 document.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; }, { passive: true });
@@ -1920,15 +1932,15 @@ document.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch =
 // Clic ailleurs : on désélectionne et on ferme les fenêtres
 document.addEventListener("mousedown", (ev) => {
   const t = ev.target;
-  if (multi.length && !ev.shiftKey && !t.closest(".ctxbar") && !t.closest(".tb") && !t.closest(".hit")) clearMulti();
-  if (!t.closest(".tb") && !t.closest(".ctxbar") && !t.closest(".ni") && selected) {
+  if (multi.length && !ev.shiftKey && !t.closest(".ctxbar, #layerline") && !t.closest(".tb") && !t.closest(".hit")) clearMulti();
+  if (!t.closest(".tb") && !t.closest(".ctxbar, #layerline") && !t.closest(".ni") && selected) {
     const was = selected;
     select(null);
     if (was.native && was.active && !was.changed) { was.active = false; redrawQuiet(); } // pas touché : on revient à l'original
   }
-  if (!t.closest(".ni") && !t.closest(".ctxbar") && selectedImage) selectImage(null);
-  if (!t.closest(".hit") && !t.closest(".sh-handle") && !t.closest(".ctxbar") && selectedShape) setSelectedShape(null);
-  if (!t.closest(".page") && !t.closest(".ctxbar") && selectedHl) selectHl(null);
+  if (!t.closest(".ni") && !t.closest(".ctxbar, #layerline") && selectedImage) selectImage(null);
+  if (!t.closest(".hit") && !t.closest(".sh-handle") && !t.closest(".ctxbar, #layerline") && selectedShape) setSelectedShape(null);
+  if (!t.closest(".page") && !t.closest(".ctxbar, #layerline") && selectedHl) selectHl(null);
   if (!t.closest(".popwrap")) closePopovers();
 });
 
@@ -1992,3 +2004,12 @@ applyMode();
 syncControls(defaults);
 syncShapeControls(shapeDefaults);
 updateCounters();
+
+// Sauvegarde : l'info sur la dernière copie automatique, au moment d'ouvrir le menu « Plus »
+(function () {
+  const info = document.getElementById("backupInfo");
+  if (!info) return;
+  fetch("/api/backup/info").then((r) => r.ok ? r.json() : null).then((d) => {
+    if (d && d.last) info.textContent = `Dernière copie automatique : ${d.last} (${d.count} gardées sur ${d.keep})`;
+  }).catch(() => {});
+})();

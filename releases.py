@@ -8,6 +8,23 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.6.0", "date": "2026-11-24",
+        "nouveautes": [
+            "Sauvegarde : une copie automatique de tous les documents chaque jour (7 jours gardés sur le serveur) et, dans le menu « Plus », un bouton « Télécharger une sauvegarde (zip) » pour garder ton espace chez toi.",
+            "Pages épinglées : sur une miniature, l'étoile ☆ épingle la page ; les pages épinglées s'affichent en haut de la barre latérale, un clic y emmène. Gardé par document.",
+            "Numéro de la première page : pour les documents en plusieurs parties, « 1ʳᵉ page » en haut de la barre latérale change la numérotation affichée (miniatures, indicateur de page, « aller à la page »). Le PDF n'est pas modifié.",
+        ],
+        "ameliorations": [
+            "Zoom fluide : la page suit tes doigts ou la molette en continu, puis se redessine nette. Le zoom part du point visé.",
+            "Calques déplacés sur la ligne du bas de la barre du haut (grisés tant qu'aucune zone de texte ou forme n'est sélectionnée).",
+            "Barre latérale des pages plus compacte (miniatures plus petites), sans rien perdre : navigation, page courante, recherche.",
+            "Document zoomé : la barre du haut reste en place quand tu fais défiler vers la gauche ou la droite.",
+        ],
+        "corrections": [
+            "« Arrière-plan » pouvait remonter l'élément au premier plan quand il était déjà le dernier : corrigé.",
+        ],
+    },
+    {
         "version": "1.5.0", "date": "2026-11-23",
         "nouveautes": [
             "Notes de version : bouton « Crédits » (réalisé par, en partenariat avec, citation…). Le texte se remplit dans DeepWell (Notes de version → Crédits) et s'affiche ici automatiquement.",

@@ -7,6 +7,26 @@ const setTopbarH = () => document.documentElement.style.setProperty("--topbar-h"
 new ResizeObserver(setTopbarH).observe(topbar);
 setTopbarH();
 
+// ---------- Réglages du document : pages épinglées et numéro de la première page (affichage seulement) ----------
+let docMeta = { pins: [], firstPage: 1 };
+const pageLabel = (n) => n + docMeta.firstPage - 1;       // numéro affiché pour la page n du PDF
+const pageFromLabel = (l) => l - docMeta.firstPage + 1;   // numéro dans le PDF pour un numéro affiché
+let metaTimer;
+function saveMeta() {
+  clearTimeout(metaTimer);
+  const name = docName;
+  metaTimer = setTimeout(() => {
+    fetch(`/api/docs/${enc(name)}/meta`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(docMeta) }).catch(() => {});
+  }, 300);
+}
+async function loadMeta() {
+  docMeta = { pins: [], firstPage: 1 };
+  try {
+    const r = await fetch(`/api/docs/${enc(docName)}/meta`);
+    if (r.ok) { const d = await r.json(); docMeta = { pins: d.pins || [], firstPage: d.firstPage ?? 1 }; }
+  } catch (e) {}
+}
+
 // ---------- Page courante ----------
 let curPage = 1;
 let restoring = false; // vrai pendant le retour à la dernière page lue
@@ -25,22 +45,24 @@ function pageAtViewport() { // la page qui occupe le milieu de la zone visible
 function updatePager() {
   if (!pages.length) return;
   curPage = pageAtViewport();
-  if (document.activeElement !== $("pageNum")) $("pageNum").value = curPage;
+  if (document.activeElement !== $("pageNum")) $("pageNum").value = pageLabel(curPage);
   markThumb();
   if (!restoring) rememberPage();
 }
 let scrollTimer;
 window.addEventListener("scroll", () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(updatePager, 80); }, { passive: true });
 
-function goToPage(n) {
+function goToPage(n, isLabel = false) {
   if (!pages.length) return;
-  n = clamp(Math.round(Number(n) || 1), 1, pages.length);
+  n = Math.round(Number(n) || 1);
+  if (isLabel) n = pageFromLabel(n);
+  n = clamp(n, 1, pages.length);
   pages[n - 1].div.scrollIntoView({ block: "start" });
   updateVisible(); // les pages d'arrivée se dessinent tout de suite
   setTimeout(updatePager, 60);
 }
-$("pageNum").addEventListener("change", () => goToPage($("pageNum").value));
-$("pageNum").addEventListener("keydown", (e) => { if (e.key === "Enter") { goToPage($("pageNum").value); e.target.blur(); } });
+$("pageNum").addEventListener("change", () => goToPage($("pageNum").value, true));
+$("pageNum").addEventListener("keydown", (e) => { if (e.key === "Enter") { goToPage($("pageNum").value, true); e.target.blur(); } });
 
 // ---------- Se souvenir de la dernière page lue (par document, dans ce navigateur) ----------
 const lastPageKey = () => "lastpage:" + docName;
@@ -56,7 +78,7 @@ function restoreLastPage() {
   resumePage = null;
   if (n <= 1 || n > pages.length) return;
   restoring = true;
-  setTimeout(() => { goToPage(n); notify(`Reprise à la page ${n}`, "ok", 2500); setTimeout(() => { restoring = false; }, 400); }, 120);
+  setTimeout(() => { goToPage(n); notify(`Reprise à la page ${pageLabel(n)}`, "ok", 2500); setTimeout(() => { restoring = false; }, 400); }, 120);
 }
 
 // ---------- Miniatures ----------
@@ -69,21 +91,84 @@ function buildThumbs() {
   thumbObserver = new IntersectionObserver((entries) => {
     for (const en of entries) if (en.isIntersecting) { thumbObserver.unobserve(en.target); drawThumb(en.target); }
   }, { root: box, rootMargin: "300px" });
+  // en-tête : numéro de la première page + épingles
+  const head = el("div", "thumbhead");
+  const first = el("button", "thumbfirst");
+  first.id = "firstPageBtn";
+  first.title = "Numéro de la première page (documents en plusieurs parties). Le PDF n'est pas modifié.";
+  first.addEventListener("click", askFirstPage);
+  const pins = el("div", "thumbpins");
+  pins.id = "thumbPins";
+  head.append(first, pins);
+  box.appendChild(head);
   for (let n = 1; n <= pdfDoc.numPages; n++) {
+    const w = el("div", "thumbw");
     const b = el("button", "thumb");
     b.dataset.n = n;
-    b.title = "Page " + n;
-    b.setAttribute("aria-label", "Aller à la page " + n);
     const cv = document.createElement("canvas");
-    cv.width = 110; cv.height = 150;
+    cv.width = 90; cv.height = 120;
     const lab = el("span", "");
-    lab.textContent = n;
     b.append(cv, lab);
     b.addEventListener("click", () => goToPage(n));
-    box.appendChild(b);
+    const pin = el("button", "thumbpin");
+    pin.dataset.n = n;
+    pin.addEventListener("click", (e) => { e.stopPropagation(); togglePin(n); });
+    w.append(b, pin);
+    box.appendChild(w);
     thumbObserver.observe(b);
   }
+  refreshThumbLabels();
   markThumb();
+}
+
+function refreshThumbLabels() { // numéros affichés, épingles, bouton « première page »
+  document.querySelectorAll(".thumb").forEach((b) => {
+    const n = Number(b.dataset.n), l = pageLabel(n);
+    b.querySelector("span").textContent = l;
+    b.title = "Page " + l;
+    b.setAttribute("aria-label", "Aller à la page " + l);
+  });
+  document.querySelectorAll(".thumbpin").forEach((p) => {
+    const on = docMeta.pins.includes(Number(p.dataset.n));
+    p.classList.toggle("on", on);
+    p.textContent = on ? "★" : "☆";
+    p.title = on ? "Retirer l'épingle" : "Épingler cette page";
+    p.setAttribute("aria-label", p.title);
+    p.setAttribute("aria-pressed", String(on));
+  });
+  const fb = $("firstPageBtn");
+  if (fb) fb.textContent = "1ʳᵉ page : " + docMeta.firstPage;
+  const box = $("thumbPins");
+  if (box) {
+    box.replaceChildren();
+    for (const n of docMeta.pins) {
+      if (n > pages.length) continue;
+      const c = el("button", "pinchip");
+      c.textContent = "★ " + pageLabel(n);
+      c.title = "Aller à la page épinglée " + pageLabel(n);
+      c.addEventListener("click", () => goToPage(n));
+      box.appendChild(c);
+    }
+  }
+  const pg = $("pageNum");
+  if (pg) { pg.min = pageLabel(1); pg.max = pageLabel(pages.length); if (document.activeElement !== pg) pg.value = pageLabel(curPage); }
+  const pc = $("pageCount"); if (pc) pc.textContent = pageLabel(pages.length);
+}
+
+function togglePin(n) {
+  const i = docMeta.pins.indexOf(n);
+  if (i >= 0) docMeta.pins.splice(i, 1); else docMeta.pins.push(n);
+  docMeta.pins.sort((a, b) => a - b);
+  refreshThumbLabels(); saveMeta();
+}
+
+function askFirstPage() {
+  const v = prompt("Numéro de la première page de ce document (ex. 101 si ce document commence à la page 101). Cela change seulement l'affichage, pas le PDF.", String(docMeta.firstPage));
+  if (v === null) return;
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || n < -9999 || n > 99999) { notify("Numéro invalide", "err", 2500); return; }
+  docMeta.firstPage = n;
+  refreshThumbLabels(); saveMeta();
 }
 
 async function drawThumb(btn) { // dessin à la demande : seulement les miniatures visibles
@@ -254,11 +339,12 @@ function onPagesRendered(initial) {
   const has = pages.length > 0;
   ["thumbsBtn", "findBtn", "fitWidth"].forEach((id) => { $(id).disabled = !has; });
   $("pager").hidden = !has;
-  $("pageCount").textContent = pages.length;
-  $("pageNum").max = pages.length;
+  $("pageCount").textContent = pageLabel(pages.length);
   addFindLayers();
   if (initial) {
+    const meta = loadMeta();
     buildThumbs();
+    meta.then(() => { refreshThumbLabels(); updatePager(); });
     closeFind();
     toggleThumbs(!!prefs.thumbs && innerWidth >= 900); // le panneau reste ouvert ou fermé comme vous l'aviez laissé
     restoreLastPage();

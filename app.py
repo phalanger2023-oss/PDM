@@ -15,7 +15,9 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
+import zipfile
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -410,6 +412,10 @@ def doc_file(name):
 
 def project_file(name):
     return PROJECTS / (clean_name(name)[:-4] + ".json")
+
+
+def meta_file(name):
+    return PROJECTS / (clean_name(name)[:-4] + ".meta.json")
 
 
 def thumb_file(name):
@@ -956,6 +962,31 @@ def project_put(name):
     return jsonify(rev=proj["rev"], saved=proj["saved"])
 
 
+@app.get("/api/docs/<name>/meta")
+def meta_get(name):
+    """Réglages du document, indépendants du brouillon : pages épinglées et numéro de la première page."""
+    if not doc_file(name).exists():
+        return jsonify(error="Document introuvable"), 404
+    try:
+        m = json.loads(meta_file(name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        m = {}
+    return jsonify(pins=[int(x) for x in m.get("pins", []) if isinstance(x, int)][:500], firstPage=int(m.get("firstPage", 1)) if isinstance(m.get("firstPage", 1), int) else 1)
+
+
+@app.put("/api/docs/<name>/meta")
+def meta_put(name):
+    if not doc_file(name).exists():
+        return jsonify(error="Document introuvable"), 404
+    d = request.get_json(silent=True) or {}
+    pins = sorted({int(x) for x in (d.get("pins") or []) if isinstance(x, int) and 1 <= x <= 100000})[:500]
+    fp = d.get("firstPage", 1)
+    fp = fp if isinstance(fp, int) and -9999 <= fp <= 99999 else 1
+    meta_file(name).parent.mkdir(parents=True, exist_ok=True)
+    write_json_atomic(meta_file(name), {"pins": pins, "firstPage": fp})
+    return jsonify(ok=True, pins=pins, firstPage=fp)
+
+
 @app.delete("/api/docs/<name>/project")
 def project_delete(name):
     """Revient au PDF d'origine : le brouillon est supprimé."""
@@ -985,10 +1016,10 @@ def doc_rename(name):
     if p.name in m:
         m[new.name] = m.pop(p.name)
         write_dossiers(m)
-    src, dst = project_file(p.name), project_file(new.name)
-    if src.exists():  # le brouillon suit le document
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        src.replace(dst)
+    for fsrc, fdst in ((project_file(p.name), project_file(new.name)), (meta_file(p.name), meta_file(new.name))):
+        if fsrc.exists():  # le brouillon et les réglages du document le suivent
+            fdst.parent.mkdir(parents=True, exist_ok=True)
+            fsrc.replace(fdst)
     try:  # la miniature se recalcule toute seule : inutile de la déplacer (et Windows refuse si elle est en cours de lecture)
         thumb_file(p.name).unlink(missing_ok=True)
     except OSError:
@@ -1100,7 +1131,7 @@ def doc_delete(name):
     if name.lower().endswith(".pdmdoc"):
         return text_delete(name)
     p = doc_file(name)
-    for f in (p, project_file(name), thumb_file(name)):
+    for f in (p, project_file(name), meta_file(name), thumb_file(name)):
         try:
             f.unlink(missing_ok=True)
         except OSError:
@@ -1378,6 +1409,75 @@ def home_logo():
     resp = send_file(path, mimetype="image/svg+xml", conditional=True)
     resp.headers["Cache-Control"] = "no-cache"
     return resp
+
+
+# ---- Sauvegardes ----
+# Automatique : une copie par jour de tout le dossier des documents (tous les comptes), 7 jours gardés, dans .backups/.
+# Manuelle : chacun télécharge un zip de son propre espace.
+BACKUP_KEEP = 7
+_BACKUP_SKIP = {".cache", ".backups", ".cle_integration", ".deepwell_url", ".logo_deepwell.svg", ".credits.json"}
+_backup_lock = threading.Lock()
+_backup_checked = 0.0
+
+
+def _zip_tree(zf, root, skip, only_top=None):
+    for f in sorted(root.rglob("*")):
+        rel = f.relative_to(root)
+        if not f.is_file() or rel.parts[0] in skip or f.name.endswith(".tmp"):
+            continue
+        zf.write(f, rel.as_posix())
+
+
+def make_daily_backup():
+    """Crée la copie du jour si elle n'existe pas encore (sans bloquer le site : lancé en arrière-plan)."""
+    day = time.strftime("%Y-%m-%d")
+    out = ROOT_DOCS / ".backups" / f"pdm-{day}.zip"
+    if out.exists():
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".zip.tmp")
+    try:
+        if tmp.exists() and time.time() - tmp.stat().st_mtime < 3600:
+            return  # un autre processus la prépare
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+            _zip_tree(zf, ROOT_DOCS, _BACKUP_SKIP)
+        tmp.replace(out)
+        for old in sorted(out.parent.glob("pdm-*.zip"))[:-BACKUP_KEEP]:
+            old.unlink(missing_ok=True)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+
+
+@app.before_request
+def daily_backup_trigger():
+    global _backup_checked
+    if time.time() - _backup_checked < 1800 or request.path.startswith("/static/"):
+        return
+    _backup_checked = time.time()
+    if _backup_lock.acquire(blocking=False):
+        def run():
+            try:
+                make_daily_backup()
+            finally:
+                _backup_lock.release()
+        threading.Thread(target=run, daemon=True).start()
+
+
+@app.get("/api/backup/info")
+def backup_info():
+    files = sorted((ROOT_DOCS / ".backups").glob("pdm-*.zip")) if (ROOT_DOCS / ".backups").exists() else []
+    last = files[-1] if files else None
+    return jsonify(count=len(files), keep=BACKUP_KEEP, last=last.stem[4:] if last else None, size=last.stat().st_size if last else 0)
+
+
+@app.get("/api/backup.zip")
+def backup_download():
+    """Un zip de vos documents (ceux de votre espace), prêt à être conservé ailleurs."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        _zip_tree(zf, Path(str(DOCS)), _BACKUP_SKIP | {".espaces", ".proprio"})
+    buf.seek(0)
+    return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=f"sauvegarde-pdm-{time.strftime('%Y-%m-%d')}.zip")
 
 
 migrate_dossiers()

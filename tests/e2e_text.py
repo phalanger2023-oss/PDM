@@ -49,7 +49,7 @@ with sync_playwright() as p:
     assert pg.evaluate("shapes.length") == 1
     zs, zt = pg.evaluate("shapes[0].z"), pg.evaluate("textboxes[0].z"); print('z forme/texte', zs, zt); assert zs > zt
     assert pg.locator('.shape-layer').count() >= 2
-    pg.click('#shapebar [data-layer=back]'); pg.wait_for_timeout(200)
+    pg.click('#layerline [data-layer=back]'); pg.wait_for_timeout(200)
     assert pg.evaluate("shapes[0].z") < pg.evaluate("textboxes[0].z")
     pl = pg.evaluate("payload()")
     assert pl['shapes'][0]['z'] < pl['textboxes'][0]['z']
