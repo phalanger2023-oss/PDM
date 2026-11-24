@@ -708,14 +708,14 @@ body[data-mode="erase"] .shape-layer .hit:hover { stroke: #e03131; }
 /* ---------- Barre d'outils verticale à gauche (comme Photoshop) : une icône par ligne ---------- */
 @media (min-width: 900px) {
   body[data-view="doc"]:not(.phone) { --strip: 44px; }
-  body[data-view="doc"]:not(.phone) .sep:has(+ .modes) { display: none; }
-  body[data-view="doc"]:not(.phone) .modes {
+  body[data-view="doc"]:not(.phone) .sep:has(+ .modes[aria-label="Outil"]) { display: none; }
+  body[data-view="doc"]:not(.phone) .modes[aria-label="Outil"] {
     position: fixed; top: var(--topbar-h, 110px); left: 0; bottom: 0; width: var(--strip); z-index: 10; box-sizing: border-box;
     display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0; overflow-y: auto;
     border: 0; border-right: 1px solid var(--border); border-radius: 0; background: var(--surface);
   }
-  body[data-view="doc"]:not(.phone) .seg span { min-width: 0; width: 34px; height: 34px; padding: 0; border-radius: 7px; }
-  body[data-view="doc"]:not(.phone) .seg + .seg span { border-left: 0; }
+  body[data-view="doc"]:not(.phone) .modes[aria-label="Outil"] .seg span { min-width: 0; width: 34px; height: 34px; padding: 0; border-radius: 7px; }
+  body[data-view="doc"]:not(.phone) .modes[aria-label="Outil"] .seg + .seg span { border-left: 0; }
   body[data-view="doc"]:not(.phone) .thumbs { left: var(--strip); }
   body[data-view="doc"]:not(.phone) .ctxbar:not(#findbar):not([hidden]) { left: var(--strip); }
   body[data-view="doc"]:not(.phone).has-thumbs .ctxbar:not(#findbar):not([hidden]) { left: calc(var(--strip) + 118px); }
