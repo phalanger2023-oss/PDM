@@ -15,6 +15,7 @@ RELEASES = [
             "Numéro de la première page : pour les documents en plusieurs parties, « 1ʳᵉ page » en haut de la barre latérale change la numérotation affichée (miniatures, indicateur de page, « aller à la page »). Le PDF n'est pas modifié.",
         ],
         "ameliorations": [
+            "Barre d'outils verticale à gauche, comme dans Photoshop : une icône par ligne (sélection, surligner, dessiner, note, texte, forme, supprimer, éditer le PDF). Sur téléphone, les outils restent en haut.",
             "Nouvel outil « Supprimer » (corbeille, touche X) dans la barre du haut : tant qu'il est actif, un clic sur une zone de texte, une forme, un trait, une note ou un surlignage l'efface (Ctrl+Z annule).",
             "Panneau d'options à gauche plus compact : plus étroit, icônes plus petites et plus nettes.",
             "Zoom fluide : la page suit tes doigts ou la molette en continu, puis se redessine nette. Le zoom part du point visé.",
