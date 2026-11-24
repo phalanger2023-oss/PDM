@@ -705,22 +705,37 @@ body[data-mode="erase"] .shape-layer .hit:hover { stroke: #e03131; }
   body.has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 302px; }
 }
 
-/* ---------- Barre d'outils verticale à gauche (comme Photoshop) : une icône par ligne ---------- */
+
+/* ---------- Panneau d'options : une liste compacte (une ligne par réglage ou action) ---------- */
+.prow { display: contents; }
+.rl { display: none; }
 @media (min-width: 900px) {
-  body[data-view="doc"]:not(.phone) { --strip: 44px; }
-  body[data-view="doc"]:not(.phone) .sep:has(+ .modes[aria-label="Outil"]) { display: none; }
-  body[data-view="doc"]:not(.phone) .modes[aria-label="Outil"] {
-    position: fixed; top: var(--topbar-h, 110px); left: 0; bottom: 0; width: var(--strip); z-index: 10; box-sizing: border-box;
-    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0; overflow-y: auto;
-    border: 0; border-right: 1px solid var(--border); border-radius: 0; background: var(--surface);
-  }
-  body[data-view="doc"]:not(.phone) .modes[aria-label="Outil"] .seg span { min-width: 0; width: 34px; height: 34px; padding: 0; border-radius: 7px; }
-  body[data-view="doc"]:not(.phone) .modes[aria-label="Outil"] .seg + .seg span { border-left: 0; }
-  body[data-view="doc"]:not(.phone) .thumbs { left: var(--strip); }
-  body[data-view="doc"]:not(.phone) .ctxbar:not(#findbar):not([hidden]) { left: var(--strip); }
-  body[data-view="doc"]:not(.phone).has-thumbs .ctxbar:not(#findbar):not([hidden]) { left: calc(var(--strip) + 118px); }
-  body[data-view="doc"]:not(.phone) #viewer { margin-left: var(--strip); }
-  body[data-view="doc"]:not(.phone).has-thumbs #viewer { margin-left: calc(var(--strip) + 118px); }
-  body[data-view="doc"]:not(.phone):has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: calc(var(--strip) + 184px); }
-  body[data-view="doc"]:not(.phone).has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: calc(var(--strip) + 302px); }
+  .ctxbar:not(#findbar):not([hidden]) { width: 158px; gap: 0; padding: 6px 6px; font-size: calc(12px * var(--ui)); }
+  .ctxbar:not(#findbar):not([hidden]) .ctxtitle { margin: 0 0 4px 4px; font-size: .95em; }
+  .ctxbar:not(#findbar):not([hidden]) .sep { margin: 4px 0; }
+  .ctxbar:not(#findbar):not([hidden]) .hint { margin: 4px; font-size: .9em; }
+  /* réglage : le nom à gauche, la valeur à droite, sur une seule ligne */
+  .ctxbar:not(#findbar):not([hidden]) .prow { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 26px; padding: 0 2px 0 4px; }
+  .ctxbar:not(#findbar):not([hidden]) .prow .plabel { display: block; margin: 0; font-size: 1em; white-space: nowrap; }
+  .ctxbar:not(#findbar):not([hidden]) .prow select { width: 86px; min-width: 0; font-size: 1em; }
+  .ctxbar:not(#findbar):not([hidden]) .prow input[type=number] { width: 52px; box-sizing: border-box; padding: 1px 4px; height: 22px; font-size: 1em; }
+  .ctxbar:not(#findbar):not([hidden]) .prow input[type=color] { width: 30px; height: 20px; padding: 0; }
+  .ctxbar:not(#findbar):not([hidden]) .prow .colfav-btn { padding: 0 2px; font-size: 11px; line-height: 1; }
+  /* action : une ligne = petite icône + un mot */
+  .ctxbar:not(#findbar):not([hidden]) .modes, .ctxbar:not(#findbar):not([hidden]) .layerbtns { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; width: 100%; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+  .ctxbar:not(#findbar):not([hidden]) .modes .seg-btn, .ctxbar:not(#findbar):not([hidden]) .tool, .ctxbar:not(#findbar):not([hidden]) .layerbtns .tool {
+    display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; height: 24px; min-width: 0; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; font-size: 1em; text-align: left; box-sizing: border-box; }
+  .ctxbar:not(#findbar):not([hidden]) .prow .tool { width: auto; flex: 1; }
+  .ctxbar:not(#findbar):not([hidden]) .modes .seg-btn + .seg-btn { border: 0; }
+  .ctxbar:not(#findbar):not([hidden]) .modes .seg-btn:hover, .ctxbar:not(#findbar):not([hidden]) .tool:hover:not(:disabled) { background: var(--hover); }
+  .ctxbar:not(#findbar):not([hidden]) .modes .seg-btn.active, .ctxbar:not(#findbar):not([hidden]) .tool.toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); }
+  .ctxbar:not(#findbar):not([hidden]) .tool.toggle { border: 0; }
+  .ctxbar:not(#findbar):not([hidden]) .seg-btn.fmt { font-size: 1em; }
+  .ctxbar:not(#findbar):not([hidden]) .seg-btn.fmt > b, .ctxbar:not(#findbar):not([hidden]) .seg-btn.fmt > i, .ctxbar:not(#findbar):not([hidden]) .seg-btn.fmt > u, .ctxbar:not(#findbar):not([hidden]) .seg-btn.fmt > s { display: inline-block; width: 14px; text-align: center; }
+  .ctxbar:not(#findbar):not([hidden]) .rl { display: inline; }
+  .ctxbar:not(#findbar):not([hidden]) .ic { width: calc(14px * var(--ui)); height: calc(14px * var(--ui)); flex: none; }
+  .ctxbar:not(#findbar):not([hidden]) .swatches { flex-wrap: wrap; gap: 4px; padding: 2px 4px; }
+  .ctxbar:not(#findbar):not([hidden]) .sw { width: 18px; height: 18px; }
+  body:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 158px; }
+  body.has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 276px; }
 }

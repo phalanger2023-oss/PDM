@@ -226,7 +226,7 @@
       <span class="ctxtitle">Surlignage</span>
       <div class="swatches" id="hlSw"></div>
       <span class="sep"></span>
-      <button id="hDelete" class="tool danger" disabled title="Supprimer le surlignage sélectionné (Suppr)" aria-label="Supprimer le surlignage"><svg class="ic"><use href="#i-trash"/></svg></button>
+      <button id="hDelete" class="tool danger" disabled title="Supprimer le surlignage sélectionné (Suppr)" aria-label="Supprimer le surlignage"><svg class="ic"><use href="#i-trash"/></svg><span class="rl">Supprimer</span></button>
       <span class="hint">Cliquez sur un surlignage pour le recolorer ou le supprimer.</span>
     </div>
 
@@ -235,16 +235,16 @@
       <span class="ctxtitle">Dessin</span>
       <div class="swatches" id="dSw"></div>
       <span class="sep"></span>
-      <input type="color" id="dStroke" value="#e03131" title="Couleur du trait">
-      <input type="number" id="dWidth" min="1" max="30" step="1" value="3" title="Épaisseur du trait">
-      <button class="tool toggle" id="dEraser" aria-pressed="false" title="Gomme : cliquer sur un trait pour l'effacer"><svg class="ic"><use href="#i-trash"/></svg></button>
+      <div class="prow"><span class="plabel">Trait</span><input type="color" id="dStroke" value="#e03131" title="Couleur du trait"></div>
+      <div class="prow"><span class="plabel">Épaisseur</span><input type="number" id="dWidth" min="1" max="30" step="1" value="3" title="Épaisseur du trait"></div>
+      <button class="tool toggle" id="dEraser" aria-pressed="false" title="Gomme : cliquer sur un trait pour l'effacer"><svg class="ic"><use href="#i-trash"/></svg><span class="rl">Gomme</span></button>
       <span class="hint">Maintenez le bouton (ou le doigt) et dessinez. Pour déplacer ou supprimer un trait, repassez en Sélection.</span>
     </div>
 
     <!-- Barre : mise en page du texte -->
     <div class="ctxbar" id="formatbar" hidden>
       <span class="ctxtitle" id="fTitle">Texte</span>
-      <span class="plabel">Police</span>
+      <div class="prow"><span class="plabel">Police</span>
       <select id="fFont" title="Police">
         <option value="helv">Sans empattement</option>
         <option value="tiro">Serif</option>
@@ -259,38 +259,39 @@
           <option value="anto">Anton (titre)</option>
         </optgroup>
       </select>
-      <span class="plabel">Taille du texte</span>
-      <input type="number" id="fSize" min="6" max="120" step="1" value="14" title="Taille (points)">
-      <span class="plabel">Couleur</span>
-      <input type="color" id="fColor" value="#000000" title="Couleur du texte">
-      <label class="lhlabel" title="Interligne (espace entre les lignes)">Interligne <input type="number" id="fLh" min="0.8" max="3" step="0.1" value="1.2"></label>
+      </div>
+      <div class="prow"><span class="plabel">Taille</span><input type="number" id="fSize" min="6" max="120" step="1" value="14" title="Taille (points)"></div>
+      <div class="prow"><span class="plabel">Couleur</span><input type="color" id="fColor" value="#000000" title="Couleur du texte"></div>
+      <div class="prow"><span class="plabel" title="Interligne (espace entre les lignes)">Interligne</span><input type="number" id="fLh" min="0.8" max="3" step="0.1" value="1.2" title="Interligne (espace entre les lignes)"></div>
       <span class="sep"></span>
       <!-- Mise en forme du texte sélectionné : gras, italique, souligné, barré -->
       <div class="modes">
-        <button class="seg-btn fmt" data-cmd="bold" title="Gras (Ctrl+B)"><b>B</b></button>
-        <button class="seg-btn fmt" data-cmd="italic" title="Italique (Ctrl+I)"><i>I</i></button>
-        <button class="seg-btn fmt" data-cmd="underline" title="Souligné (Ctrl+U)"><u>U</u></button>
-        <button class="seg-btn fmt" data-cmd="strikeThrough" title="Barré"><s>S</s></button>
+        <button class="seg-btn fmt" data-cmd="bold" title="Gras (Ctrl+B)"><b>B</b><span class="rl">Gras</span></button>
+        <button class="seg-btn fmt" data-cmd="italic" title="Italique (Ctrl+I)"><i>I</i><span class="rl">Italique</span></button>
+        <button class="seg-btn fmt" data-cmd="underline" title="Souligné (Ctrl+U)"><u>U</u><span class="rl">Souligné</span></button>
+        <button class="seg-btn fmt" data-cmd="strikeThrough" title="Barré"><s>S</s><span class="rl">Barré</span></button>
       </div>
       <span class="sep"></span>
       <div class="modes">
-        <button class="seg-btn" data-align="0" title="Aligné à gauche"><svg class="ic"><use href="#i-align-left"/></svg></button>
-        <button class="seg-btn" data-align="1" title="Centré"><svg class="ic"><use href="#i-align-center"/></svg></button>
-        <button class="seg-btn" data-align="2" title="Aligné à droite"><svg class="ic"><use href="#i-align-right"/></svg></button>
+        <button class="seg-btn" data-align="0" title="Aligné à gauche"><svg class="ic"><use href="#i-align-left"/></svg><span class="rl">Gauche</span></button>
+        <button class="seg-btn" data-align="1" title="Centré"><svg class="ic"><use href="#i-align-center"/></svg><span class="rl">Centré</span></button>
+        <button class="seg-btn" data-align="2" title="Aligné à droite"><svg class="ic"><use href="#i-align-right"/></svg><span class="rl">Droite</span></button>
       </div>
       <span class="annot-only sep"></span>
-      <button class="annot-only tool toggle" id="fFillOn" aria-pressed="false" title="Fond de la zone"><svg class="ic"><use href="#i-fill"/></svg></button>
-      <input class="annot-only" type="color" id="fFill" value="#ffffcc" title="Couleur du fond">
-      <button class="annot-only tool toggle" id="fBorder" aria-pressed="false" title="Cadre (couleur du texte)"><svg class="ic"><use href="#i-frame"/></svg></button>
+      <div class="annot-only prow">
+        <button class="tool toggle" id="fFillOn" aria-pressed="false" title="Fond de la zone"><svg class="ic"><use href="#i-fill"/></svg><span class="rl">Fond</span></button>
+        <input type="color" id="fFill" value="#ffffcc" title="Couleur du fond">
+      </div>
+      <button class="annot-only tool toggle" id="fBorder" aria-pressed="false" title="Cadre (couleur du texte)"><svg class="ic"><use href="#i-frame"/></svg><span class="rl">Cadre</span></button>
       <span class="annot-only sep"></span>
       <div class="annot-only layerbtns" role="group" aria-label="Copier-coller">
-        <button class="tool" id="fCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg></button>
-        <button class="tool" id="fPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg></button>
-        <button class="tool" id="fDup" title="Dupliquer (Ctrl+D)" aria-label="Dupliquer"><svg class="ic"><use href="#i-dup"/></svg></button>
+        <button class="tool" id="fCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg><span class="rl">Copier</span></button>
+        <button class="tool" id="fPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg><span class="rl">Coller</span></button>
+        <button class="tool" id="fDup" title="Dupliquer (Ctrl+D)" aria-label="Dupliquer"><svg class="ic"><use href="#i-dup"/></svg><span class="rl">Dupliquer</span></button>
       </div>
       <span class="sep"></span>
-      <button id="fReset" class="native-only tool" disabled title="Rétablir l'original pour l'élément sélectionné" aria-label="Rétablir"><svg class="ic"><use href="#i-undo"/></svg></button>
-      <button id="fDelete" class="tool danger" disabled title="Supprimer l'élément sélectionné (Suppr)" aria-label="Supprimer"><svg class="ic"><use href="#i-trash"/></svg></button>
+      <button id="fReset" class="native-only tool" disabled title="Rétablir l'original pour l'élément sélectionné" aria-label="Rétablir"><svg class="ic"><use href="#i-undo"/></svg><span class="rl">Rétablir</span></button>
+      <button id="fDelete" class="tool danger" disabled title="Supprimer l'élément sélectionné (Suppr)" aria-label="Supprimer"><svg class="ic"><use href="#i-trash"/></svg><span class="rl">Supprimer</span></button>
       <span class="native-only hint" id="nativeHint">Cliquez un paragraphe ou une image du PDF pour le modifier.</span>
     </div>
 
@@ -298,26 +299,28 @@
     <div class="ctxbar" id="shapebar" hidden>
       <span class="ctxtitle">Forme</span>
       <div class="modes">
-        <button class="seg-btn" data-kind="rect" title="Rectangle / carré"><svg class="ic"><use href="#i-rect"/></svg></button>
-        <button class="seg-btn" data-kind="ellipse" title="Ellipse / rond"><svg class="ic"><use href="#i-ellipse"/></svg></button>
-        <button class="seg-btn" data-kind="triangle" title="Triangle"><svg class="ic"><use href="#i-triangle"/></svg></button>
-        <button class="seg-btn" data-kind="line" title="Ligne"><svg class="ic"><use href="#i-line"/></svg></button>
-        <button class="seg-btn" data-kind="arrow" title="Flèche"><svg class="ic"><use href="#i-arrow"/></svg></button>
-        <button class="seg-btn" data-kind="pen" title="Crayon (dessin à main levée)"><svg class="ic"><use href="#i-pen"/></svg></button>
+        <button class="seg-btn" data-kind="rect" title="Rectangle / carré"><svg class="ic"><use href="#i-rect"/></svg><span class="rl">Rectangle</span></button>
+        <button class="seg-btn" data-kind="ellipse" title="Ellipse / rond"><svg class="ic"><use href="#i-ellipse"/></svg><span class="rl">Ellipse</span></button>
+        <button class="seg-btn" data-kind="triangle" title="Triangle"><svg class="ic"><use href="#i-triangle"/></svg><span class="rl">Triangle</span></button>
+        <button class="seg-btn" data-kind="line" title="Ligne"><svg class="ic"><use href="#i-line"/></svg><span class="rl">Ligne</span></button>
+        <button class="seg-btn" data-kind="arrow" title="Flèche"><svg class="ic"><use href="#i-arrow"/></svg><span class="rl">Flèche</span></button>
+        <button class="seg-btn" data-kind="pen" title="Crayon (dessin à main levée)"><svg class="ic"><use href="#i-pen"/></svg><span class="rl">Crayon</span></button>
       </div>
       <span class="sep"></span>
-      <input type="color" id="sStroke" value="#e03131" title="Couleur du trait">
-      <input type="number" id="sWidth" min="1" max="20" step="1" value="2" title="Épaisseur du trait">
-      <button class="tool toggle" id="sFillOn" aria-pressed="false" title="Remplissage (rectangle, ellipse, triangle)"><svg class="ic"><use href="#i-fill"/></svg></button>
-      <input type="color" id="sFill" value="#ffec99" title="Couleur du remplissage">
+      <div class="prow"><span class="plabel">Trait</span><input type="color" id="sStroke" value="#e03131" title="Couleur du trait"></div>
+      <div class="prow"><span class="plabel">Épaisseur</span><input type="number" id="sWidth" min="1" max="20" step="1" value="2" title="Épaisseur du trait"></div>
+      <div class="prow">
+        <button class="tool toggle" id="sFillOn" aria-pressed="false" title="Remplissage (rectangle, ellipse, triangle)"><svg class="ic"><use href="#i-fill"/></svg><span class="rl">Fond</span></button>
+        <input type="color" id="sFill" value="#ffec99" title="Couleur du remplissage">
+      </div>
       <span class="sep"></span>
       <div class="layerbtns" role="group" aria-label="Copier-coller">
-        <button class="tool" id="sCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg></button>
-        <button class="tool" id="sPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg></button>
-        <button class="tool" id="sDup" title="Dupliquer (Ctrl+D)" aria-label="Dupliquer"><svg class="ic"><use href="#i-dup"/></svg></button>
+        <button class="tool" id="sCopy" title="Copier (Ctrl+C)" aria-label="Copier"><svg class="ic"><use href="#i-copy"/></svg><span class="rl">Copier</span></button>
+        <button class="tool" id="sPaste" title="Coller (Ctrl+V)" aria-label="Coller"><svg class="ic"><use href="#i-paste"/></svg><span class="rl">Coller</span></button>
+        <button class="tool" id="sDup" title="Dupliquer (Ctrl+D)" aria-label="Dupliquer"><svg class="ic"><use href="#i-dup"/></svg><span class="rl">Dupliquer</span></button>
       </div>
       <span class="sep"></span>
-      <button id="sDelete" class="tool danger" disabled title="Supprimer la forme sélectionnée (Suppr)" aria-label="Supprimer"><svg class="ic"><use href="#i-trash"/></svg></button>
+      <button id="sDelete" class="tool danger" disabled title="Supprimer la forme sélectionnée (Suppr)" aria-label="Supprimer"><svg class="ic"><use href="#i-trash"/></svg><span class="rl">Supprimer</span></button>
     </div>
 
     <!-- Barre : recherche dans le PDF -->
