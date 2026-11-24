@@ -15,6 +15,8 @@ RELEASES = [
             "Numéro de la première page : pour les documents en plusieurs parties, « 1ʳᵉ page » en haut de la barre latérale change la numérotation affichée (miniatures, indicateur de page, « aller à la page »). Le PDF n'est pas modifié.",
         ],
         "ameliorations": [
+            "Nouvel outil « Supprimer » (corbeille, touche X) dans la barre du haut : tant qu'il est actif, un clic sur une zone de texte, une forme, un trait, une note ou un surlignage l'efface (Ctrl+Z annule).",
+            "Panneau d'options à gauche plus compact : plus étroit, icônes plus petites et plus nettes.",
             "Zoom fluide : la page suit tes doigts ou la molette en continu, puis se redessine nette. Le zoom part du point visé.",
             "Calques déplacés sur la ligne du bas de la barre du haut (grisés tant qu'aucune zone de texte ou forme n'est sélectionnée).",
             "Barre latérale des pages plus compacte (miniatures plus petites), sans rien perdre : navigation, page courante, recherche.",

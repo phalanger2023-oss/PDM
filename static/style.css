@@ -394,7 +394,7 @@ body[data-mode="text"] .textLayer, body[data-mode="shape"] .textLayer, body[data
 .shape-layer { width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .shape-layer .vis { pointer-events: none; }
 .shape-layer .hit { pointer-events: none; }
-body[data-mode="select"] .shape-layer .hit, body[data-mode="shape"] .shape-layer .hit, body.eraser[data-mode="draw"] .shape-layer .hit[data-pen] { pointer-events: visiblePainted; cursor: move; }
+body[data-mode="select"] .shape-layer .hit, body[data-mode="shape"] .shape-layer .hit, body[data-mode="erase"] .shape-layer .hit, body.eraser[data-mode="draw"] .shape-layer .hit[data-pen] { pointer-events: visiblePainted; cursor: move; }
 .sh-box { position: absolute; border: 1px dashed var(--sel); pointer-events: none; }
 .sh-handle { position: absolute; width: 11px; height: 11px; margin: -6px 0 0 -6px; background: var(--sel); border: 1px solid #fff; border-radius: 2px; pointer-events: auto; cursor: nwse-resize; touch-action: none; }
 .sh-handle.nesw { cursor: nesw-resize; }
@@ -683,3 +683,24 @@ body[data-view="doc"] .layerline { display: flex; }
 }
 @media (max-width: 899px) { body.has-thumbs #viewer { margin-left: 0; } }
 .pager input { width: 4.8em; }
+
+/* mode Supprimer : curseur « croix » et surbrillance rouge de ce qui sera effacé */
+body[data-mode="erase"] .page, body[data-mode="erase"] .tb, body[data-mode="erase"] .note, body[data-mode="erase"] .shape-layer .hit { cursor: not-allowed; }
+body[data-mode="erase"] .tb:hover { outline: 2px solid #e03131; outline-offset: 1px; }
+body[data-mode="erase"] .tb .ed { pointer-events: none; }
+body[data-mode="erase"] .shape-layer .hit:hover { stroke: #e03131; }
+
+/* ---------- Panneau d'options (à gauche) : plus compact, icônes plus petites et plus nettes ---------- */
+@media (min-width: 900px) {
+  .ctxbar:not(#findbar):not([hidden]) { width: 184px; gap: 6px; padding: 8px 9px; font-size: calc(13px * var(--ui)); }
+  .ctxbar:not(#findbar):not([hidden]) .ic { width: calc(15px * var(--ui)); height: calc(15px * var(--ui)); stroke-width: 1.7; }
+  .ctxbar:not(#findbar):not([hidden]) .tool { width: calc(28px * var(--ui)); height: calc(28px * var(--ui)); }
+  .ctxbar:not(#findbar):not([hidden]) select, .ctxbar:not(#findbar):not([hidden]) input[type=number] { padding: 3px 6px; }
+  .ctxbar:not(#findbar):not([hidden]) input[type=color] { height: 26px; }
+  .ctxbar:not(#findbar):not([hidden]) .sep { margin: 1px 0; }
+  .ctxbar:not(#findbar):not([hidden]) .plabel { font-size: .8em; margin-bottom: -4px; }
+  .ctxbar:not(#findbar):not([hidden]) .ctxtitle { font-size: .95em; }
+  .ctxbar:not(#findbar):not([hidden]) .sw { width: 20px; height: 20px; }
+  body:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 184px; }
+  body.has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 302px; }
+}

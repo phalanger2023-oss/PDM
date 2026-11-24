@@ -508,6 +508,11 @@ function onPageClick(ev, pageIndex) {
   const mode = currentMode();
   const b = pages[pageIndex].div.getBoundingClientRect();
   // Un clic (sans glisser) sur un surlignage le sélectionne : on peut alors le recolorer ou le supprimer
+  if (mode === "erase" && !ev.target.closest(".tb, .note, .ni, .hit, .sh-handle")) { // mode Supprimer : un clic efface le surlignage visé
+    const hl = hlAt(pageIndex, (ev.clientX - b.left) / SCALE, (ev.clientY - b.top) / SCALE);
+    if (hl) { highlights = highlights.filter((x) => x !== hl); markDirty(); redraw(); }
+    return;
+  }
   if ((mode === "select" || mode === "highlight") && window.getSelection().isCollapsed &&
       !ev.target.closest(".tb, .note, .ni, .hit, .sh-handle")) {
     selectHl(hlAt(pageIndex, (ev.clientX - b.left) / SCALE, (ev.clientY - b.top) / SCALE));
@@ -797,7 +802,10 @@ function buildBox(tb, idle = false) {
   if (idle) { // paragraphe du PDF pas encore touché : un clic l'active
     box.addEventListener("mousedown", (ev) => { ev.preventDefault(); activateNative(tb, ev.clientX, ev.clientY); });
   } else {
-    box.addEventListener("mousedown", (ev) => { if (ev.shiftKey) { ev.preventDefault(); toggleMulti(tb); return; } select(tb); });
+    box.addEventListener("mousedown", (ev) => {
+      if (currentMode() === "erase") { ev.preventDefault(); ev.stopPropagation(); textboxes = textboxes.filter((x) => x !== tb); if (selected === tb) selected = null; markDirty(); redraw(); return; }
+      if (ev.shiftKey) { ev.preventDefault(); toggleMulti(tb); return; } select(tb);
+    });
     ed.addEventListener("focus", () => select(tb));
     ed.addEventListener("keydown", (e) => { // Entrée = saut de ligne simple (pas de <div> imbriqués)
       if (e.key === "Enter") { e.preventDefault(); document.execCommand("insertLineBreak"); }
@@ -1394,6 +1402,11 @@ function startShapeMove(ev, s) {
   if (ev.button !== 0) return;
   ev.preventDefault(); ev.stopPropagation();
   if (ev.shiftKey) { toggleMulti(s); return; }
+  if (currentMode() === "erase") { // mode Supprimer : le clic efface la forme ou le trait
+    shapes = shapes.filter((x) => x !== s); if (selectedShape === s) selectedShape = null;
+    renderShapes(s.page - 1); markDirty(); updateCounters();
+    return;
+  }
   if (currentMode() === "draw") { // gomme : le clic sur un trait l'efface
     if (eraser && s.kind === "pen") { shapes = shapes.filter((x) => x !== s); if (selectedShape === s) selectedShape = null; renderShapes(s.page - 1); markDirty(); updateCounters(); }
     return;
@@ -1533,6 +1546,7 @@ function redraw() {
     d.style.top = n.y * SCALE + "px";
     d.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      if (currentMode() === "erase") { notes = notes.filter((x) => x !== n); markDirty(); redraw(); return; }
       const t = prompt("Modifier la note (laisser vide pour la supprimer) :", n.text);
       if (t === null) return;
       if (t === "") {
@@ -1821,6 +1835,7 @@ function applyMode() {
   updateBars();                                // chaque barre n'apparaît que dans son mode
   $("formatbar").hidden = !(m === "text" || m === "native");
   $("shapebar").hidden = m !== "shape";
+  if (m === "erase") { select(null); setSelectedShape(null); selectHl(null); }
   $("drawbar").hidden = m !== "draw";
   $("fTitle").textContent = m === "native" ? "Contenu du PDF" : "Texte";
   // en quittant le mode « Éditer le PDF », les paragraphes non touchés redeviennent le PDF tout simple
