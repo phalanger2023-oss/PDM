@@ -754,7 +754,11 @@ function startTextBox(ev, pageIndex) {
     band.remove();
     let [a, c, d, f] = rect(e);
     // simple clic sans tracer : zone par défaut de 200 points de large, deux lignes de haut
-    if (d - a < 20 || f - c < 20) { d = a + 200 * SCALE; f = c + defaults.size * 2.4 * SCALE; }
+    // Le clic est au milieu de la hauteur de la première ligne : la zone s'ouvre à droite du curseur, centrée sur lui.
+    if (d - a < 20 || f - c < 20) {
+      const h = (defaults.size * (defaults.lh || 1.2) + 4) * SCALE;
+      d = a + 200 * SCALE; c = Math.max(0, c - h / 2); f = c + h;
+    }
     const tb = {
       page: pageIndex + 1, x0: a / SCALE, y0: c / SCALE, x1: d / SCALE, y1: f / SCALE,
       paras: [[]], ...defaults, z: nextZ(),
@@ -1981,7 +1985,10 @@ document.addEventListener("keydown", (e) => {
   const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
   if (ctrl && key === "s") { e.preventDefault(); forceSave(); }
   else if (ctrl && key === "o") { e.preventDefault(); $("file").click(); }
-  else if (ctrl && (key === "z" || key === "y") && inDoc() && !ownsText(e.target)) { e.preventDefault(); (key === "y" || e.shiftKey) ? redo() : undo(); }
+  else if (ctrl && (key === "z" || key === "y") && inDoc() && (!ownsText(e.target) || e.target.closest?.(".ctxbar:not(#findbar)"))) { // les champs du panneau d'options (taille, couleur…) n'ont pas leur propre historique : on annule le travail
+    e.preventDefault(); if (e.target !== document.body) e.target.blur?.();
+    (key === "y" || e.shiftKey) ? redo() : undo();
+  }
   else if (ctrl && key === "d" && inDoc() && !ownsText(e.target) && (copyItem() || multi.length > 1)) { e.preventDefault(); duplicateElement(); }
   else if (ctrl && (key === "c" || key === "x") && inDoc() && !hasTextSelection() && !ownsText(e.target) && (copyItem() || multi.length > 1)) { e.preventDefault(); key === "c" ? copyElement() : cutElement(); }
   else if (ctrl && key === "x" && inDoc() && e.target.closest?.(".tb") && !hasTextSelection() && copyItem()) { e.preventDefault(); cutElement(); }

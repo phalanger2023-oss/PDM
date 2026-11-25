@@ -739,3 +739,17 @@ body[data-mode="erase"] .shape-layer .hit:hover { stroke: #e03131; }
   body:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 158px; }
   body.has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 276px; }
 }
+
+/* ligne du bas, fine : calques au centre, compteurs à droite */
+.layerline { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 0 14px 3px; border-top: 0; min-height: 0; }
+body:not([data-view="doc"]) .layerline { display: none; }
+body[data-view="doc"] .layerline { display: grid; }
+.layerline .ll-center { display: flex; align-items: center; justify-content: center; gap: 2px; }
+.layerline .ll-center .tool { width: 26px; height: 26px; }
+.layerline .ll-center .ic { width: 15px; height: 15px; }
+.layerline .status { margin: 0; justify-self: end; }
+.toolbar { padding-bottom: 2px; }
+@media (max-width: 899px) { .layerline { grid-template-columns: auto 1fr; } .layerline .ll-side { display: none; } .layerline .ll-center { justify-content: flex-start; } }
+
+/* plus de « vide » en balayant au bout du document : pas d'effet élastique ni de retour arrière sur le côté */
+html, body { overscroll-behavior-x: none; }

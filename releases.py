@@ -8,6 +8,17 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.6.1", "date": "2026-11-25",
+        "ameliorations": [
+            "Barre du haut plus fine : la ligne des calques est fusionnée avec la deuxième ligne (calques au centre, compteurs à droite).",
+            "Zone de texte : en cliquant, la zone s'ouvre à droite du curseur, avec le curseur au milieu de la hauteur de la première ligne (création plus précise).",
+        ],
+        "corrections": [
+            "Ctrl+Z / Ctrl+Y depuis un champ du panneau d'options (taille, couleur…) : annulaient la saisie du champ et ajoutaient une étape ; ils annulent maintenant le travail, comme partout ailleurs.",
+            "Balayer vers la droite au bout du document ne tire plus l'interface dans le vide (plus d'effet élastique sur les côtés).",
+        ],
+    },
+    {
         "version": "1.6.0", "date": "2026-11-24",
         "nouveautes": [
             "Sauvegarde : une copie automatique de tous les documents chaque jour (7 jours gardés sur le serveur) et, dans le menu « Plus », un bouton « Télécharger une sauvegarde (zip) » pour garder ton espace chez toi.",

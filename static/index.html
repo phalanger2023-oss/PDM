@@ -131,7 +131,6 @@
       </div>
 
       <span class="grow" aria-hidden="true"></span>
-      <span id="status" class="status doc-only"></span>
 
       <button id="download" class="tool primary doc-only" disabled title="Télécharger le PDF final (votre PDF d'origine n'est jamais modifié)" aria-label="Télécharger le PDF"><svg class="ic"><use href="#i-download"/></svg></button>
       <span class="sep"></span>
@@ -213,13 +212,16 @@
 
     <!-- Barre : surlignage (couleurs) -->
     <!-- Calques : sur la ligne du bas de la barre du haut (zones de texte et formes se superposent) -->
-    <div class="layerline doc-only" id="layerline" role="group" aria-label="Calques">
-      <span class="grouplabel">Calques</span>
-      <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan" disabled><svg class="ic"><use href="#i-layer-front"/></svg></button>
-      <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer" disabled><svg class="ic"><use href="#i-chev-up"/></svg></button>
-      <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer" disabled><svg class="ic"><use href="#i-chev-down"/></svg></button>
-      <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan" disabled><svg class="ic"><use href="#i-layer-back"/></svg></button>
-      <span class="hint" id="layerHint">Sélectionnez une zone de texte ou une forme pour changer son plan.</span>
+    <div class="layerline doc-only" id="layerline">
+      <span class="ll-side" aria-hidden="true"></span>
+      <div class="ll-center" role="group" aria-label="Calques">
+        <span class="grouplabel">Calques</span>
+        <button class="tool" data-layer="front" title="Premier plan" aria-label="Premier plan" disabled><svg class="ic"><use href="#i-layer-front"/></svg></button>
+        <button class="tool" data-layer="forward" title="Avancer d'un plan" aria-label="Avancer" disabled><svg class="ic"><use href="#i-chev-up"/></svg></button>
+        <button class="tool" data-layer="backward" title="Reculer d'un plan" aria-label="Reculer" disabled><svg class="ic"><use href="#i-chev-down"/></svg></button>
+        <button class="tool" data-layer="back" title="Arrière-plan" aria-label="Arrière-plan" disabled><svg class="ic"><use href="#i-layer-back"/></svg></button>
+      </div>
+      <span id="status" class="status"></span>
     </div>
 
     <div class="ctxbar" id="hlbar" hidden>
