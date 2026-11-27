@@ -168,15 +168,15 @@ colorInput("Couleur du texte", "<b style='color:#d32f2f'>A</b>", "foreColor"); c
 sb("justifyLeft", tbtn(ic("left"), "Aligner à gauche", () => cmd("justifyLeft"))); sb("justifyCenter", tbtn(ic("center"), "Centrer", () => cmd("justifyCenter"))); sb("justifyRight", tbtn(ic("right"), "Aligner à droite", () => cmd("justifyRight"))); sb("justifyFull", tbtn(ic("justify"), "Justifier", () => cmd("justifyFull"))); tsep();
 sb("insertUnorderedList", tbtn(ic("ul"), "Liste à puces", () => cmd("insertUnorderedList"))); sb("insertOrderedList", tbtn(ic("ol"), "Liste numérotée", () => cmd("insertOrderedList")));
 tbtn(ic("indent"), "Augmenter le retrait", () => cmd("indent")); tbtn(ic("outdent"), "Diminuer le retrait", () => cmd("outdent")); tsep();
-tbtn(ic("link"), "Insérer un lien", () => {
+tbtn(ic("link"), "Insérer un lien", async () => {
   const sel = getSelection(); const saved = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-  const url = prompt("Adresse du lien (https://…) :", "https://"); if (!url || !/^(https?:\/\/|mailto:)/i.test(url.trim())) { if (url) fail("L'adresse doit commencer par https://"); return; }
+  const url = await askText({ title: "Insérer un lien", label: "Adresse (https://…)", value: "https://", ok: "Insérer" }); if (!url || !/^(https?:\/\/|mailto:)/i.test(url.trim())) { if (url) fail("L'adresse doit commencer par https://"); return; }
   if (saved) { sel.removeAllRanges(); sel.addRange(saved); }
   if (sel.isCollapsed) cmd("insertHTML", `<a href="${url.trim().replace(/"/g, "%22")}">${url.trim().replace(/</g, "&lt;")}</a>`); else cmd("createLink", url.trim());
 });
 tbtn(ic("image"), "Insérer une image", () => $("txImg").click());
-tbtn(ic("table"), "Insérer un tableau", () => {
-  const v = prompt("Tableau : lignes × colonnes (ex. 3x4)", "3x3"); const m = /^(\d{1,2})\s*[x×*]\s*(\d{1,2})$/i.exec((v || "").trim()); if (!m) return;
+tbtn(ic("table"), "Insérer un tableau", async () => {
+  const v = await askText({ title: "Insérer un tableau", label: "Lignes × colonnes (ex. 3x4)", value: "3x3", ok: "Insérer" }); const m = /^(\d{1,2})\s*[x×*]\s*(\d{1,2})$/i.exec((v || "").trim()); if (!m) return;
   const r = +m[1], c = +m[2]; let h = '<table style="width:100%"><tbody>';
   for (let i = 0; i < r; i++) { h += "<tr>"; for (let j = 0; j < c; j++) h += i === 0 ? "<th><br></th>" : "<td><br></td>"; h += "</tr>"; }
   cmd("insertHTML", h + "</tbody></table><p><br></p>");

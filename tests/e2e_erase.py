@@ -10,7 +10,7 @@ with sync_playwright() as p:
     pg.mouse.click(bb['x']+100, bb['y']+300); pg.wait_for_timeout(400); pg.keyboard.type('Bonjour'); pg.wait_for_timeout(300)
     w = pg.evaluate("document.querySelector('.ctxbar:not([hidden]):not(#findbar)').getBoundingClientRect().width"); print('panneau', w); assert w <= 190
     pg.evaluate("document.querySelector('input[name=mode][value=note]').click()")
-    pg.once('dialog', lambda d: d.accept('ma note')); pg.mouse.click(bb['x']+400, bb['y']+500); pg.wait_for_timeout(500)
+    pg.mouse.click(bb['x']+400, bb['y']+500); pg.fill('.dlg-input','ma note'); pg.keyboard.press('Control+Enter'); pg.wait_for_timeout(500)
     pg.evaluate("document.querySelector('input[name=mode][value=shape]').click()")
     pg.mouse.move(bb['x']+200, bb['y']+600); pg.mouse.down(); pg.mouse.move(bb['x']+320, bb['y']+680, steps=6); pg.mouse.up(); pg.wait_for_timeout(500)
     print('avant:', pg.evaluate("[textboxes.length, notes.length, shapes.length]")); assert pg.evaluate("textboxes.length>=1 && notes.length==1 && shapes.length>=1")

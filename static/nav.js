@@ -20,10 +20,11 @@ function saveMeta() {
   }, 300);
 }
 async function loadMeta() {
+  _toolsReady = false;
   docMeta = { pins: [], firstPage: 1 };
   try {
     const r = await fetch(`/api/docs/${enc(docName)}/meta`);
-    if (r.ok) { const d = await r.json(); docMeta = { pins: d.pins || [], firstPage: d.firstPage ?? 1 }; }
+    if (r.ok) { const d = await r.json(); docMeta = { pins: d.pins || [], firstPage: d.firstPage ?? 1, tools: d.tools || null }; }
   } catch (e) {}
 }
 
@@ -101,6 +102,15 @@ function buildThumbs() {
   pins.id = "thumbPins";
   head.append(first, pins);
   box.appendChild(head);
+  // pages choisies pour un téléchargement partiel (Ctrl+clic, ou Maj+clic pour une plage)
+  selPages.clear(); selLast = 0;
+  const selBar = el("div", "thumbsel"); selBar.id = "thumbSel"; selBar.hidden = true;
+  const dlSel = el("button", "thumbdl"); dlSel.id = "dlSelBtn"; dlSel.type = "button";
+  dlSel.addEventListener("click", () => downloadPages([...selPages].sort((x, y) => x - y)));
+  const clr = el("button", "thumbclr"); clr.type = "button"; clr.textContent = "✕"; clr.title = "Désélectionner les pages"; clr.setAttribute("aria-label", clr.title);
+  clr.addEventListener("click", () => { selPages.clear(); paintSel(); });
+  selBar.append(dlSel, clr);
+  box.appendChild(selBar);
   for (let n = 1; n <= pdfDoc.numPages; n++) {
     const w = el("div", "thumbw");
     const b = el("button", "thumb");
@@ -109,7 +119,11 @@ function buildThumbs() {
     cv.width = 90; cv.height = 120;
     const lab = el("span", "");
     b.append(cv, lab);
-    b.addEventListener("click", () => goToPage(n));
+    b.addEventListener("click", (ev) => {
+      if (ev.ctrlKey || ev.metaKey) { selPages.has(n) ? selPages.delete(n) : selPages.add(n); selLast = n; paintSel(); return; }
+      if (ev.shiftKey && selLast) { const [lo, hi] = [Math.min(selLast, n), Math.max(selLast, n)]; for (let i = lo; i <= hi; i++) selPages.add(i); paintSel(); return; }
+      goToPage(n);
+    });
     const pin = el("button", "thumbpin");
     pin.dataset.n = n;
     pin.addEventListener("click", (e) => { e.stopPropagation(); togglePin(n); });
@@ -119,6 +133,16 @@ function buildThumbs() {
   }
   refreshThumbLabels();
   markThumb();
+}
+
+const selPages = new Set(); let selLast = 0;
+function paintSel() {
+  document.querySelectorAll(".thumb").forEach((b) => b.classList.toggle("sel", selPages.has(Number(b.dataset.n))));
+  const bar = $("thumbSel"); if (!bar) return;
+  bar.hidden = !selPages.size;
+  const c = selPages.size;
+  $("dlSelBtn").textContent = `⬇ Télécharger ${c} page${c > 1 ? "s" : ""}`;
+  $("dlSelBtn").title = "Télécharge un PDF avec seulement les pages choisies (Ctrl+clic pour en ajouter, Maj+clic pour une plage)";
 }
 
 function refreshThumbLabels() { // numéros affichés, épingles, bouton « première page »
@@ -162,8 +186,8 @@ function togglePin(n) {
   refreshThumbLabels(); saveMeta();
 }
 
-function askFirstPage() {
-  const v = prompt("Numéro de la première page de ce document (ex. 101 si ce document commence à la page 101). Cela change seulement l'affichage, pas le PDF.", String(docMeta.firstPage));
+async function askFirstPage() {
+  const v = await askText({ title: "Numéro de la première page", label: "Ex. 101 si ce document commence à la page 101. Cela change seulement l'affichage, pas le PDF.", value: String(docMeta.firstPage) });
   if (v === null) return;
   const n = Math.round(Number(v));
   if (!Number.isFinite(n) || n < -9999 || n > 99999) { notify("Numéro invalide", "err", 2500); return; }
@@ -324,6 +348,7 @@ $("findBtn").addEventListener("click", () => ($("findbar").hidden ? openFind() :
 // ---------- Appelé par app.js quand on quitte un document (retour à l'accueil) ----------
 function onDocClosed() {
   if (thumbObserver) { thumbObserver.disconnect(); thumbObserver = null; }
+  selPages.clear(); selLast = 0;
   $("thumbs").replaceChildren();
   $("thumbs").hidden = true;
   document.body.classList.remove("has-thumbs");
@@ -344,7 +369,7 @@ function onPagesRendered(initial) {
   if (initial) {
     const meta = loadMeta();
     buildThumbs();
-    meta.then(() => { refreshThumbLabels(); updatePager(); });
+    meta.then(() => { refreshThumbLabels(); updatePager(); applyDocTools(docMeta.tools); });
     closeFind();
     toggleThumbs(!!prefs.thumbs && innerWidth >= 900); // le panneau reste ouvert ou fermé comme vous l'aviez laissé
     restoreLastPage();

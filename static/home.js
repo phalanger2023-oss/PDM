@@ -157,7 +157,7 @@ function renderGrid() {
   $("docCount").textContent = searching ? `· ${list.length + subs.length} résultat(s)` : cwd ? `· ${cwd.split("/").pop()}` : docs.length ? `· ${docs.length}` : "";
 }
 $("newFolder").addEventListener("click", async () => {
-  const name = prompt(cwd ? `Nom du nouveau dossier (dans « ${cwd.split("/").pop()} ») :` : "Nom du nouveau dossier :");
+  const name = await askText({ title: "Nouveau dossier", label: cwd ? `Dans « ${cwd.split("/").pop()} »` : "Nom du dossier", ok: "Créer" });
   if (!name || !name.trim()) return;
   const r = await fetch("/api/folders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parent: cwd, name: name.trim() }) });
   const d = await r.json().catch(() => ({}));
@@ -236,7 +236,7 @@ function buildFolder(f, searching) {
   };
   item("folder", "Ouvrir", "", () => goFolder(f.path));
   item("pencil", "Renommer", "", async () => {
-    const want = prompt("Nouveau nom du dossier :", f.name);
+    const want = await askText({ title: "Renommer le dossier", value: f.name, ok: "Renommer" });
     if (want === null || !want.trim() || want.trim() === f.name) return;
     const r = await fetch("/api/folders/rename", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: f.path, newName: want.trim() }) });
     const d = await r.json().catch(() => ({}));
@@ -246,7 +246,7 @@ function buildFolder(f, searching) {
   });
   item("folder", "Déplacer vers…", "", async () => { const to = await pickFolder(`Déplacer « ${f.name} » vers`, f.path); if (to !== null) await moveFolder(f.path, to); });
   item("trash", "Supprimer le dossier", "danger", async () => {
-    if (!confirm(`Supprimer le dossier « ${f.name} » ?\n\nSes documents et sous-dossiers ne sont PAS supprimés : ils remontent d'un niveau.`)) return;
+    if (!(await askConfirm({ title: "Supprimer le dossier", message: `« ${f.name} » sera supprimé.\nSes documents et sous-dossiers ne sont PAS supprimés : ils remontent d'un niveau.`, ok: "Supprimer", danger: true }))) return;
     const r = await fetch("/api/folders/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: f.path }) });
     if (!r.ok) { fail("Suppression impossible"); return; }
     if (cwd === f.path || cwd.startsWith(f.path + "/")) cwd = f.parent;
@@ -324,7 +324,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCardM
 // ---------- Actions sur une carte ----------
 async function renameFromHome(d) {
   const cur = stripPdf(d.name);
-  const want = prompt("Nouveau nom du document :", cur);
+  const want = await askText({ title: "Renommer le document", value: cur, ok: "Renommer" });
   if (want === null || !want.trim() || want.trim() === cur) return;
   const res = await fetch(`/api/${d.kind === "text" ? "texts" : "docs"}/${enc(d.name)}/rename`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ newName: want.trim() }),
@@ -343,14 +343,14 @@ function downloadFromHome(d) { // le PDF final = l'original + votre brouillon, f
 }
 
 async function resetFromHome(d) {
-  if (!confirm(`Revenir à l'original pour « ${stripPdf(d.name)} » ?\n\nToutes vos modifications de ce document seront supprimées.`)) return;
+  if (!(await askConfirm({ title: "Revenir à l'original", message: `« ${stripPdf(d.name)} » : toutes vos modifications seront supprimées.`, ok: "Revenir à l'original", danger: true }))) return;
   await fetch(`/api/docs/${enc(d.name)}/project`, { method: "DELETE" });
   notify("Document remis à l'original", "ok", 2500);
   renderHome();
 }
 
 async function deleteFromHome(d) {
-  if (!confirm(`Supprimer « ${stripPdf(d.name)} » ?\n\nLe document et ses modifications seront supprimés de Mes documents.\nVotre fichier d'origine sur l'ordinateur n'est pas touché.`)) return;
+  if (!(await askConfirm({ title: "Supprimer le document", message: `« ${stripPdf(d.name)} » et ses modifications seront supprimés de Mes documents.\nVotre fichier d'origine sur l'ordinateur n'est pas touché.`, ok: "Supprimer", danger: true }))) return;
   await fetch(`/api/docs/${enc(d.name)}`, { method: "DELETE" });
   notify("Document supprimé", "ok", 2500);
   renderHome();
@@ -372,7 +372,7 @@ $("linkCopy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("linkKey").value); $("linkCopy").textContent = "Copié ✓"; setTimeout(() => { $("linkCopy").textContent = "Copier"; }, 1500); } catch (e) { $("linkKey").select(); }
 });
 $("linkRenew").addEventListener("click", async () => {
-  if (!confirm("Créer une nouvelle clé ? L'ancienne cessera de fonctionner : il faudra recopier la nouvelle dans DeepWell.")) return;
+  if (!(await askConfirm({ title: "Nouvelle clé", message: "L'ancienne clé cessera de fonctionner : il faudra recopier la nouvelle dans DeepWell.", ok: "Créer une nouvelle clé" }))) return;
   const r = await fetch("/api/integration/key/renew", { method: "POST" });
   if (!r.ok) return;
   $("linkKey").value = (await r.json()).key;

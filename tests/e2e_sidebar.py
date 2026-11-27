@@ -19,7 +19,7 @@ with sync_playwright() as p:
     pg.hover('.thumbw >> nth=0'); pg.click('.thumbpin >> nth=0'); pg.wait_for_timeout(500)
     assert pg.evaluate("document.querySelectorAll('.pinchip').length") == 1
     # numéro de première page
-    pg.once('dialog', lambda d: d.accept('101')); pg.click('#firstPageBtn'); pg.wait_for_timeout(500)
+    pg.click('#firstPageBtn'); pg.fill('.dlg-input','101'); pg.keyboard.press('Enter'); pg.wait_for_timeout(500)
     assert pg.evaluate("document.querySelector('.thumb span').textContent") == '101', pg.evaluate("document.querySelector('.thumb span').textContent")
     assert pg.input_value('#pageNum') == '101'
     if n > 1:

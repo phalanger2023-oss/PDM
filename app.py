@@ -962,6 +962,34 @@ def project_put(name):
     return jsonify(rev=proj["rev"], saved=proj["saved"])
 
 
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _num(v, lo, hi, default):
+    return min(max(float(v), lo), hi) if isinstance(v, (int, float)) and not isinstance(v, bool) else default
+
+
+def _clean_tools(t):
+    """Réglages d'outils par document (texte, formes, dessin) : on ne garde que des valeurs valides."""
+    if not isinstance(t, dict):
+        return None
+    col = lambda v, d=None: v if isinstance(v, str) and _HEX.match(v) else d
+    out = {}
+    x = t.get("text")
+    if isinstance(x, dict):
+        font = x.get("font")
+        out["text"] = {"font": font if isinstance(font, str) and re.match(r"^[a-z]{3,6}$", font) else "helv", "size": _num(x.get("size"), 1, 400, 14), "color": col(x.get("color"), "#000000"),
+                       "align": int(_num(x.get("align"), 0, 3, 0)), "fill": col(x.get("fill")), "border": bool(x.get("border")), "lh": _num(x.get("lh"), 0.5, 4, 1.2)}
+    x = t.get("shape")
+    if isinstance(x, dict):
+        out["shape"] = {"kind": x.get("kind") if x.get("kind") in ("rect", "ellipse", "triangle", "line", "arrow", "pen") else "rect", "stroke": col(x.get("stroke"), "#e03131"),
+                        "width": _num(x.get("width"), 1, 30, 2), "fill": col(x.get("fill"))}
+    x = t.get("draw")
+    if isinstance(x, dict):
+        out["draw"] = {"stroke": col(x.get("stroke"), "#e03131"), "width": _num(x.get("width"), 1, 30, 3)}
+    return out or None
+
+
 @app.get("/api/docs/<name>/meta")
 def meta_get(name):
     """Réglages du document, indépendants du brouillon : pages épinglées et numéro de la première page."""
@@ -971,7 +999,7 @@ def meta_get(name):
         m = json.loads(meta_file(name).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         m = {}
-    return jsonify(pins=[int(x) for x in m.get("pins", []) if isinstance(x, int)][:500], firstPage=int(m.get("firstPage", 1)) if isinstance(m.get("firstPage", 1), int) else 1)
+    return jsonify(pins=[int(x) for x in m.get("pins", []) if isinstance(x, int)][:500], firstPage=int(m.get("firstPage", 1)) if isinstance(m.get("firstPage", 1), int) else 1, tools=_clean_tools(m.get("tools")))
 
 
 @app.put("/api/docs/<name>/meta")
@@ -983,8 +1011,9 @@ def meta_put(name):
     fp = d.get("firstPage", 1)
     fp = fp if isinstance(fp, int) and -9999 <= fp <= 99999 else 1
     meta_file(name).parent.mkdir(parents=True, exist_ok=True)
-    write_json_atomic(meta_file(name), {"pins": pins, "firstPage": fp})
-    return jsonify(ok=True, pins=pins, firstPage=fp)
+    tools = _clean_tools(d.get("tools"))
+    write_json_atomic(meta_file(name), {"pins": pins, "firstPage": fp, "tools": tools})
+    return jsonify(ok=True, pins=pins, firstPage=fp, tools=tools)
 
 
 @app.delete("/api/docs/<name>/project")
@@ -1076,6 +1105,16 @@ def doc_download(name):
     if not p.exists():
         return jsonify(error="Document introuvable"), 404
     out, _ = annotate(p.read_bytes(), payload)
+    wanted = payload.get("pages")
+    if isinstance(wanted, list) and wanted:  # téléchargement partiel : seulement les pages choisies, dans l'ordre du document
+        d = pymupdf.open(stream=out, filetype="pdf")
+        keep = sorted({int(n) - 1 for n in wanted if isinstance(n, (int, float)) and 1 <= int(n) <= d.page_count})
+        if not keep:
+            d.close()
+            return jsonify(error="Aucune page valide"), 400
+        d.select(keep)
+        out = d.tobytes(garbage=3, deflate=True)
+        d.close()
     return send_file(io.BytesIO(out), mimetype="application/pdf", as_attachment=True,
                      download_name=clean_name(payload.get("newName") or p.name))
 

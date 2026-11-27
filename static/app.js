@@ -21,7 +21,7 @@ const APP_NAME = "Personal Document Modifier";
 const ACCENTS = ["#37352f", "#c2693c", "#9f6b53", "#5a8f6a", "#8f6bb5", "#c4577b", "#4f7396"];
 const HL_COLORS = ["#ffe000", "#69db7c", "#ff8fab", "#74c0fc", "#ffa94d"];
 const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
-const DEFAULT_PREFS = { theme: "auto", palette: "notion", accent: null, bg: null, surface: null, font: "notion", radius: null, css: "", ui: 1, hl: HL_COLORS[0], zoom: 1.5 };
+const DEFAULT_PREFS = { theme: "auto", palette: "notion", accent: null, bg: null, surface: null, font: "notion", radius: null, css: "", ui: 1, hl: HL_COLORS[0], zoom: 1.5, opts: true };
 let prefs = { ...DEFAULT_PREFS };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem("prefs") || "{}")); } catch (e) {}
 const drawDefaults = { stroke: prefs.drawColor || "#e03131", width: prefs.drawWidth || 3 };
@@ -472,6 +472,35 @@ $("zoomIn").addEventListener("click", () => { const base = zoomTarget || SCALE, 
 $("zoomOut").addEventListener("click", () => { const base = zoomTarget || SCALE, v = [...ZOOM_STEPS].reverse().find((z) => z < base - 0.01); if (v) zoomBy(v / base); });
 
 // ====================== 3. Surligner ======================
+/** Fusionne les rectangles d'une sélection : le navigateur en donne plusieurs (span + texte) par ligne, ce qui superposait les couleurs et assombrissait le surlignage. */
+/** Rectangles des seuls morceaux de texte sélectionnés (on ignore les rectangles de conteneurs, qui couvraient toute la page quand la sélection traversait deux pages). */
+function selectionTextRects(range) {
+  const out = [], root = range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentNode;
+  if (range.commonAncestorContainer.nodeType === 3) { return [...range.getClientRects()]; }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!range.intersectsNode(n) || !n.nodeValue.length || !n.parentElement?.closest(".textLayer")) continue;
+    const r = document.createRange(); r.selectNodeContents(n);
+    if (n === range.startContainer) r.setStart(n, range.startOffset);
+    if (n === range.endContainer) r.setEnd(n, range.endOffset);
+    if (r.collapsed) continue;
+    for (const q of r.getClientRects()) out.push(q);
+  }
+  return out;
+}
+function mergeRects(list) {
+  const rs = list.map((r) => r.slice()).filter((r) => r[2] - r[0] > 0.5 && r[3] - r[1] > 0.5).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const out = [];
+  for (const r of rs) {
+    const m = out.find((o) => {
+      const v = Math.min(o[3], r[3]) - Math.max(o[1], r[1]);
+      return v >= 0.5 * Math.min(o[3] - o[1], r[3] - r[1]) && r[0] <= o[2] + 3 && r[2] >= o[0] - 3; // même ligne et se touchent
+    });
+    if (m) { m[0] = Math.min(m[0], r[0]); m[1] = Math.min(m[1], r[1]); m[2] = Math.max(m[2], r[2]); m[3] = Math.max(m[3], r[3]); }
+    else out.push(r);
+  }
+  return out;
+}
 document.addEventListener("mouseup", () => {
   if (currentMode() !== "highlight") return;
   if (activeEditor()) return;
@@ -480,7 +509,7 @@ document.addEventListener("mouseup", () => {
 
   // Chaque ligne de texte sélectionnée donne un rectangle ; on le rattache à sa page.
   const perPage = {};
-  for (const r of sel.getRangeAt(0).getClientRects()) {
+  for (const r of selectionTextRects(sel.getRangeAt(0))) {
     if (r.width < 1 || r.height < 1) continue;
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     const idx = pages.findIndex(({ div }) => {
@@ -494,7 +523,9 @@ document.addEventListener("mouseup", () => {
       (r.right - b.left) / SCALE, (r.bottom - b.top) / SCALE,
     ]);
   }
-  for (const [idx, rects] of Object.entries(perPage)) {
+  for (const [idx, rects0] of Object.entries(perPage)) {
+    const rects = mergeRects(rects0);
+    if (!rects.length) continue;
     const h = { page: Number(idx) + 1, rects, color: prefs.hl };
     highlights.push(h);
   }
@@ -504,7 +535,7 @@ document.addEventListener("mouseup", () => {
 });
 
 // ====================== 4. Notes ======================
-function onPageClick(ev, pageIndex) {
+async function onPageClick(ev, pageIndex) {
   const mode = currentMode();
   const b = pages[pageIndex].div.getBoundingClientRect();
   // Un clic (sans glisser) sur un surlignage le sélectionne : on peut alors le recolorer ou le supprimer
@@ -519,8 +550,8 @@ function onPageClick(ev, pageIndex) {
     return;
   }
   if (mode !== "note" || ev.target.closest(".note") || ev.target.closest(".tb")) return;
-  const text = prompt("Texte de la note :");
-  if (!text) return;
+  const text = await askText({ title: "Nouvelle note", multiline: true, ok: "Ajouter" });
+  if (!text || !text.trim()) return;
   const note = {
     page: pageIndex + 1,
     x: (ev.clientX - b.left) / SCALE,
@@ -584,8 +615,8 @@ $("dStroke").value = drawDefaults.stroke; $("dWidth").value = drawDefaults.width
   b.addEventListener("click", () => { $("dStroke").value = c; $("dStroke").dispatchEvent(new Event("input")); });
   $("dSw").appendChild(b);
 });
-$("dStroke").addEventListener("input", () => { drawDefaults.stroke = $("dStroke").value; prefs.drawColor = drawDefaults.stroke; savePrefs(); document.querySelectorAll("#dSw .sw").forEach((b) => b.classList.toggle("active", b.dataset.color === drawDefaults.stroke)); });
-$("dWidth").addEventListener("input", () => { drawDefaults.width = Math.min(30, Math.max(1, Number($("dWidth").value) || 3)); prefs.drawWidth = drawDefaults.width; savePrefs(); });
+$("dStroke").addEventListener("input", () => { drawDefaults.stroke = $("dStroke").value; prefs.drawColor = drawDefaults.stroke; savePrefs(); saveDocTools(); document.querySelectorAll("#dSw .sw").forEach((b) => b.classList.toggle("active", b.dataset.color === drawDefaults.stroke)); });
+$("dWidth").addEventListener("input", () => { drawDefaults.width = Math.min(30, Math.max(1, Number($("dWidth").value) || 3)); prefs.drawWidth = drawDefaults.width; saveDocTools(); savePrefs(); });
 $("dEraser").addEventListener("click", () => { eraser = !eraser; $("dEraser").setAttribute("aria-pressed", String(eraser)); document.body.classList.toggle("eraser", eraser); });
 
 // ====================== 5. Texte riche (gras, italique, souligné, barré) ======================
@@ -668,7 +699,12 @@ function activeEditor() {
 try { document.execCommand("styleWithCSS", false, false); } catch (e) {}
 document.querySelectorAll(".fmt").forEach((b) => {
   b.addEventListener("mousedown", (e) => e.preventDefault()); // garde la sélection dans la zone
-  b.addEventListener("click", () => { if (activeEditor()) document.execCommand(b.dataset.cmd); });
+  b.addEventListener("click", () => {
+    if (!activeEditor()) return;
+    const x = window.scrollX, y = window.scrollY; // la mise en forme ne doit jamais déplacer la vue
+    document.execCommand(b.dataset.cmd);
+    window.scrollTo(x, y); requestAnimationFrame(() => window.scrollTo(x, y));
+  });
 });
 document.addEventListener("selectionchange", () => {
   const ed = activeEditor();
@@ -755,19 +791,20 @@ function startTextBox(ev, pageIndex) {
     let [a, c, d, f] = rect(e);
     // simple clic sans tracer : zone par défaut de 200 points de large, deux lignes de haut
     // Le clic est au milieu de la hauteur de la première ligne : la zone s'ouvre à droite du curseur, centrée sur lui.
+    let autow = false;
     if (d - a < 20 || f - c < 20) {
       const h = (defaults.size * (defaults.lh || 1.2) + 4) * SCALE;
-      d = a + 200 * SCALE; c = Math.max(0, c - h / 2); f = c + h;
+      d = a + 40 * SCALE; c = Math.max(0, c - h / 2); f = c + h; autow = true; // largeur libre : la zone s'élargit avec le texte jusqu'à Entrée ou jusqu'à ce qu'on règle sa largeur
     }
     const tb = {
       page: pageIndex + 1, x0: a / SCALE, y0: c / SCALE, x1: d / SCALE, y1: f / SCALE,
-      paras: [[]], ...defaults, z: nextZ(),
+      paras: [[]], ...defaults, z: nextZ(), autow,
     };
     textboxes.push(tb);
     selected = tb;
     markDirty();
     redraw();
-    boxEls.get(tb).querySelector(".ed").focus();
+    boxEls.get(tb).querySelector(".ed").focus({ preventScroll: true });
   };
   window.addEventListener("mousemove", move);
   window.addEventListener("mouseup", up);
@@ -810,13 +847,19 @@ function buildBox(tb, idle = false) {
       if (currentMode() === "erase") { ev.preventDefault(); ev.stopPropagation(); textboxes = textboxes.filter((x) => x !== tb); if (selected === tb) selected = null; markDirty(); redraw(); return; }
       if (ev.shiftKey) { ev.preventDefault(); toggleMulti(tb); return; } select(tb);
     });
-    ed.addEventListener("focus", () => select(tb));
+    ed.addEventListener("focus", () => { select(tb); box.classList.add("editing"); });
+    ed.addEventListener("blur", () => box.classList.remove("editing"));
+    box.addEventListener("dblclick", (ev) => { if (currentMode() !== "erase" && !ev.target.closest(".tb-grip, .tb-edge, .tb-top, .tb-bottom, .tb-corner, .tb-resize")) enterEdit(tb, ev.clientX, ev.clientY); });
+    dragHandle(box, tb, "move"); // un clic sélectionne toute la zone ; glisser la déplace (le texte s'édite par double-clic)
     ed.addEventListener("keydown", (e) => { // Entrée = saut de ligne simple (pas de <div> imbriqués)
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); ed.blur(); return; } // on sort de la saisie, la zone reste sélectionnée
+      if (e.key === "Enter" && tb.autow) { tb.autow = false; box.classList.remove("autow"); } // Entrée : la largeur est figée
       if (e.key === "Enter") { e.preventDefault(); document.execCommand("insertLineBreak"); }
     });
     ed.addEventListener("paste", (e) => { // on colle toujours du texte brut
       e.preventDefault();
       const t = ((e.clipboardData || window.clipboardData).getData("text/plain") || "").replace(/\r/g, "");
+      if (t.includes("\n") && tb.autow) { tb.autow = false; box.classList.remove("autow"); }
       t.split("\n").forEach((ln, i) => {
         if (i) document.execCommand("insertLineBreak");
         if (ln) document.execCommand("insertText", false, ln);
@@ -878,6 +921,13 @@ function styleBox(tb) {
 function fitBox(tb) {
   const box = boxEls.get(tb);
   if (!box || tb.native) return;
+  box.classList.toggle("autow", !!tb.autow);
+  if (tb.autow) { // largeur libre : la zone suit la largeur de sa ligne (pas de retour automatique)
+    box.style.width = "max-content"; // on mesure la ligne telle qu'elle est (sans limite), puis on fixe cette largeur
+    const w = Math.max(box.getBoundingClientRect().width / SCALE + 1, 30);
+    if (Math.abs(w - (tb.x1 - tb.x0)) > 0.5) tb.x1 = tb.x0 + w;
+    box.style.width = (tb.x1 - tb.x0) * SCALE + "px";
+  }
   const h = box.offsetHeight;
   if (h > 0) tb.y1 = tb.y0 + h / SCALE;
 }
@@ -886,6 +936,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => boxE
 // Déplacer (poignée ✥) ou redimensionner (poignée en bas à droite) à la souris
 function dragHandle(handle, tb, kind) {
   handle.addEventListener("pointerdown", (ev) => {
+    if (handle.classList.contains("tb") && (handle.classList.contains("editing") || ev.shiftKey || currentMode() === "erase" || ev.target.closest(".tb-grip, .tb-edge, .tb-top, .tb-bottom, .tb-corner, .tb-resize"))) return; // la zone elle-même : on ne la déplace que si on n'écrit pas dedans
     ev.preventDefault(); ev.stopPropagation();
     select(tb);
     handle.setPointerCapture(ev.pointerId);
@@ -893,6 +944,7 @@ function dragHandle(handle, tb, kind) {
     const o = { x0: tb.x0, y0: tb.y0, x1: tb.x1, y1: tb.y1, size: tb.size };
     const move = (e) => {
       const dx = (e.clientX - sx) / SCALE, dy = (e.clientY - sy) / SCALE;
+      if (kind === "left" || kind === "right" || kind === "corner") { tb.autow = false; boxEls.get(tb)?.classList.remove("autow"); }
       if (kind === "move") {
         tb.x0 = o.x0 + dx; tb.x1 = o.x1 + dx; tb.y0 = o.y0 + dy; tb.y1 = o.y1 + dy;
       } else if (kind === "right") {
@@ -901,12 +953,12 @@ function dragHandle(handle, tb, kind) {
         tb.x0 = Math.min(o.x0 + dx, o.x1 - 20);
       } else if (kind === "top" || kind === "bottom") { // la poignée suit la souris : le bord opposé reste en place
         const h0 = Math.max(o.y1 - o.y0, 10), k = Math.min(Math.max((kind === "top" ? h0 - dy : h0 + dy) / h0, 0.15), 8);
-        tb.size = Math.round(Math.min(Math.max(o.size * k, 6), 200) * 2) / 2; fSize.value = tb.size;
+        tb.size = Math.round(Math.min(Math.max(o.size * k, 1), 400) * 2) / 2; fSize.value = tb.size;
         styleBox(tb); fitBox(tb);
         if (kind === "top") { const h = tb.y1 - tb.y0; tb.y1 = o.y1; tb.y0 = o.y1 - h; } else { tb.y0 = o.y0; }
       } else if (kind === "corner") { // échelle globale : largeur et texte changent dans la même proportion, coin haut-gauche fixe
         const w0 = Math.max(o.x1 - o.x0, 20), h0 = Math.max(o.y1 - o.y0, 10), k = Math.min(Math.max(1 + (dx * w0 + dy * h0) / (w0 * w0 + h0 * h0), 0.2), 8);
-        tb.x1 = o.x0 + w0 * k; tb.size = Math.round(Math.min(Math.max(o.size * k, 6), 200) * 2) / 2; fSize.value = tb.size;
+        tb.x1 = o.x0 + w0 * k; tb.size = Math.round(Math.min(Math.max(o.size * k, 1), 400) * 2) / 2; fSize.value = tb.size;
         styleBox(tb); fitBox(tb); tb.y0 = o.y0;
       } else {
         tb.x1 = Math.max(o.x1 + dx, o.x0 + 20); tb.y1 = Math.max(o.y1 + dy, o.y0 + 14);
@@ -960,6 +1012,7 @@ function select(tb) {
   }
   selected = tb;
   if (tb && selectedHl) selectHl(null);
+  if (tb && selectedShape) setSelectedShape(null);
   if (tb && selectedImage) { selectedImage = null; imgEls.forEach((b) => b.classList.remove("selected")); }
   boxEls.forEach((box, t) => {
     box.classList.toggle("selected", t === tb);
@@ -990,6 +1043,20 @@ function syncControls(s) {
 
 // Un réglage change : on l'applique à la zone sélectionnée (sinon aux prochaines zones)
 function applyStyle(patch) {
+  if (multi.length > 1) { // plusieurs zones sélectionnées (Maj + clic) : le réglage s'applique à toutes
+    const boxes = multi.filter((m) => textboxes.includes(m));
+    if (boxes.length) {
+      boxes.forEach((t) => {
+        Object.assign(t, patch);
+        if (patch.color && t.paras) t.paras.forEach((p) => p.forEach((r) => { delete r.c; }));
+        if (t.native) t.changed = true;
+        const bx = boxEls.get(t);
+        if (bx && patch.color) { const ed = bx.querySelector(".ed"); ed.querySelectorAll("span[style]").forEach((sp) => sp.style.removeProperty("color")); bx._base = JSON.stringify(readParas(ed)); }
+        styleBox(t);
+      });
+      markDirty(); return;
+    }
+  }
   if (selected && selected.native) { // paragraphe du PDF : on ne touche pas aux réglages des futures zones
     Object.assign(selected, patch);
     if (patch.color && selected.paras) { // choisir une couleur pour tout le paragraphe efface les couleurs propres à certains morceaux
@@ -1004,11 +1071,34 @@ function applyStyle(patch) {
   Object.assign(defaults, patch);
   if (selected) { Object.assign(selected, patch); styleBox(selected); markDirty(); }
   syncControls(selected || defaults);
+  saveDocTools();
 }
 const pressed = (b) => b.getAttribute("aria-pressed") === "true";
 fFont.addEventListener("change", () => applyStyle({ font: fFont.value }));
-fSize.addEventListener("input", () => applyStyle({ size: Math.min(Math.max(Number(fSize.value) || 14, 6), 120) }));
-fColor.addEventListener("input", () => applyStyle({ color: fColor.value }));
+fSize.addEventListener("input", () => { const v = Number(fSize.value); if (v > 0) applyStyle({ size: Math.min(Math.max(v, 1), 400) }); }); // jusqu'à 1 pt : très petites polices possibles
+// Couleur : sur les mots sélectionnés dans le texte (comme dans un traitement de texte), sinon sur toute la zone
+let edSel = null;
+document.addEventListener("selectionchange", () => {
+  const s = getSelection();
+  if (!s.rangeCount) return;
+  const n = s.anchorNode, ed = n && (n.nodeType === 1 ? n : n.parentElement)?.closest?.(".tb .ed");
+  if (!ed) return;
+  edSel = s.isCollapsed ? null : { ed, range: s.getRangeAt(0).cloneRange() };
+});
+fColor.addEventListener("input", () => {
+  if (edSel && edSel.ed.isConnected && !selected?.deleted) {
+    const s = getSelection();
+    if (document.activeElement !== edSel.ed) edSel.ed.focus({ preventScroll: true });
+    s.removeAllRanges(); s.addRange(edSel.range);
+    document.execCommand("styleWithCSS", false, true);
+    document.execCommand("foreColor", false, fColor.value);
+    edSel.range = s.rangeCount ? s.getRangeAt(0).cloneRange() : edSel.range;
+    const bx = edSel.ed.closest(".tb"), tb = [...boxEls].find(([, v]) => v === bx)?.[0];
+    if (tb) { syncBox(tb, bx); fitBox(tb); if (tb.native) { tb.changed = true; updateSelectionButtons(); } }
+    return;
+  }
+  applyStyle({ color: fColor.value });
+});
 fLh.addEventListener("input", () => { const v = Number(fLh.value); if (v >= 0.8 && v <= 3) applyStyle({ lh: Math.round(v * 100) / 100 }); });
 fFillOn.addEventListener("click", () => applyStyle({ fill: pressed(fFillOn) ? null : fFill.value }));
 fFill.addEventListener("input", () => applyStyle({ fill: fFill.value }));
@@ -1139,8 +1229,20 @@ function activateNative(nb, cx, cy) {
   redraw();
   const ed = boxEls.get(nb)?.querySelector(".ed");
   if (!ed) return;
-  ed.focus();
+  ed.focus({ preventScroll: true });
   try { // le curseur se place là où vous avez cliqué
+    const r = document.caretRangeFromPoint(cx, cy);
+    if (r && ed.contains(r.startContainer)) { const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  } catch (e) {}
+}
+
+// Double-clic (ou Entrée) sur une zone sélectionnée : on entre dans le texte, curseur là où on a cliqué
+function enterEdit(tb, cx, cy) {
+  const ed = boxEls.get(tb)?.querySelector(".ed");
+  if (!ed) return;
+  ed.focus({ preventScroll: true });
+  if (cx == null) { const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return; }
+  try {
     const r = document.caretRangeFromPoint(cx, cy);
     if (r && ed.contains(r.startContainer)) { const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
   } catch (e) {}
@@ -1355,9 +1457,32 @@ function setSelectedShape(s) {
 }
 
 // Dessiner : mode « Forme », puis cliquer-glisser
+let pendingLine = null; // ligne/flèche en cours de tracé par deux clics
+function pendingPt(e) { const { b, pi } = pendingLine, bb = pages[pi].div.getBoundingClientRect(); return [clamp((e.clientX - bb.left) / SCALE, 0, bb.width / SCALE), clamp((e.clientY - bb.top) / SCALE, 0, bb.height / SCALE)]; }
+function pendingMove(e) {
+  if (!pendingLine) return;
+  if (currentMode() !== "shape") return cancelPendingLine();
+  [pendingLine.s.x1, pendingLine.s.y1] = pendingPt(e); renderShapes(pendingLine.pi);
+}
+function cancelPendingLine() {
+  if (!pendingLine) return;
+  const { s, pi } = pendingLine; pendingLine = null;
+  window.removeEventListener("pointermove", pendingMove); document.body.classList.remove("pending-line");
+  shapes = shapes.filter((x) => x !== s); renderShapes(pi);
+}
+function finishPendingLine(e) {
+  const { s, pi } = pendingLine; [s.x1, s.y1] = pendingPt(e);
+  pendingLine = null; window.removeEventListener("pointermove", pendingMove); document.body.classList.remove("pending-line");
+  if (Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6) { shapes = shapes.filter((x) => x !== s); renderShapes(pi); return; }
+  setSelectedShape(s); markDirty(); updateCounters();
+}
 function startShape(ev, pi) {
   const mode = currentMode();
   if ((mode !== "shape" && mode !== "draw") || ev.button !== 0) return;
+  if (pendingLine) { // 2e clic : la ligne est tracée entre les deux points cliqués
+    if (ev.target.closest(".sh-handle")) return;
+    ev.preventDefault(); finishPendingLine(ev); return;
+  }
   if (mode === "draw" && eraser) return; // gomme active : on n'ajoute pas de trait (voir startShapeMove)
   if (ev.target.closest(".tb") || ev.target.closest(".note") || ev.target.closest(".hit") || ev.target.closest(".sh-handle")) return;
   ev.preventDefault();
@@ -1385,6 +1510,11 @@ function startShape(ev, pi) {
     window.removeEventListener("pointercancel", cancel);
     if (!cancelled) { if (pen) { const q = pt(e), l = s.pts[s.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > 0.3) s.pts.push(q); fitPen(); } else [s.x1, s.y1] = pt(e); }
     const tiny = pen ? (s.pts.length < 2 || Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 2) : Math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6;
+    if (!cancelled && tiny && !pen && (s.kind === "line" || s.kind === "arrow")) { // simple clic : on attend le 2e point (Échap annule)
+      pendingLine = { s, pi, b }; renderShapes(pi); document.body.classList.add("pending-line");
+      window.addEventListener("pointermove", pendingMove);
+      return;
+    }
     if (cancelled || tiny) { // simple clic : on ne crée rien
       shapes = shapes.filter((x) => x !== s);
       renderShapes(pi);
@@ -1471,6 +1601,7 @@ function syncShapeControls(s) {
 
 function applyShapeStyle(patch) {
   Object.assign(shapeDefaults, patch);
+  saveDocTools();
   const s = selectedShape;
   if (s && !("kind" in patch)) { // trait, épaisseur, remplissage : on modifie la forme sélectionnée
     Object.assign(s, patch);
@@ -1548,10 +1679,10 @@ function redraw() {
     d.title = n.text + "\n(clic : modifier ou supprimer)";
     d.style.left = n.x * SCALE + "px";
     d.style.top = n.y * SCALE + "px";
-    d.addEventListener("click", (ev) => {
+    d.addEventListener("click", async (ev) => {
       ev.stopPropagation();
       if (currentMode() === "erase") { notes = notes.filter((x) => x !== n); markDirty(); redraw(); return; }
-      const t = prompt("Modifier la note (laisser vide pour la supprimer) :", n.text);
+      const t = await askText({ title: "Modifier la note", label: "Laissez vide pour la supprimer.", value: n.text, multiline: true, ok: "Enregistrer" });
       if (t === null) return;
       if (t === "") {
         notes = notes.filter((x) => x !== n);
@@ -1771,20 +1902,23 @@ async function renameCurrent() {
   notify("Document renommé ✓", "ok", 2000);
 }
 
-async function download() {
+async function download(pageList) {
   if (!docName) return;
-  setStatus("Création du PDF annoté…");
+  const part = Array.isArray(pageList) && pageList.length ? pageList : null; // null = tout le document
+  setStatus(part ? "Création du PDF des pages choisies…" : "Création du PDF annoté…");
   const res = await fetch(`/api/docs/${enc(docName)}/download`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload()),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload(), pages: part }),
   });
   if (!res.ok) { fail("Erreur pendant l'export"); return; }
   const url = URL.createObjectURL(await res.blob());
-  const a = Object.assign(document.createElement("a"), { href: url, download: (nameInput.value.trim() || stripPdf(docName)) + ".pdf" });
+  const base = nameInput.value.trim() || stripPdf(docName);
+  const a = Object.assign(document.createElement("a"), { href: url, download: base + (part ? "-extrait" : "") + ".pdf" });
   a.click();
   URL.revokeObjectURL(url);
-  toast("Copie téléchargée ✓");
+  toast(part ? `${part.length} page(s) téléchargée(s) ✓` : "Copie téléchargée ✓");
 }
-$("download").addEventListener("click", download);
+function downloadPages(list) { return download(list); }
+$("download").addEventListener("click", () => download());
 
 function toast(msg, ms = 2500) { setStatus(msg); notify(msg, "ok", Math.max(ms, 2500)); setTimeout(updateCounters, ms); }
 function fail(msg) { setStatus(msg); notify(msg, "error", 6000); }
@@ -1916,19 +2050,28 @@ $("sDup").addEventListener("click", duplicateElement);
 // ---- Zoom : pincement au doigt, pincement du pavé tactile (Ctrl + molette), Ctrl + molette ----
 let zoomTarget = null, zoomTimer = null;
 /** Zoom fluide : pendant le geste, la page est simplement agrandie à l'écran (transformation, sans rien redessiner) ; le vrai rendu net n'est refait qu'une fois le geste fini. */
+let zoomAnchor = null;
 function zoomBy(factor, cx = innerWidth / 2, cy = innerHeight / 2) {
   zoomTarget = clamp((zoomTarget || SCALE) * factor, 0.4, 4);
   const view = $("viewer"), rect = view.getBoundingClientRect(), f = zoomTarget / SCALE;
-  if (!view.dataset.zoomOrigin) view.dataset.zoomOrigin = `${cx - rect.left}px ${cy - rect.top}px`; // le point sous le doigt / curseur reste en place pendant tout le geste
+  if (!view.dataset.zoomOrigin) { view.dataset.zoomOrigin = `${cx - rect.left}px ${cy - rect.top}px`; zoomAnchor = { cx, cy }; } // le point sous le doigt / curseur reste en place pendant tout le geste
   view.style.transformOrigin = view.dataset.zoomOrigin; view.style.transform = `scale(${f})`; view.style.willChange = "transform";
   clearTimeout(zoomTimer);
   zoomTimer = setTimeout(async () => {
     const v = Math.round(zoomTarget * 100) / 100; zoomTarget = null;
     const end = () => { view.style.transform = ""; view.style.transformOrigin = ""; view.style.willChange = ""; delete view.dataset.zoomOrigin; };
     if (Math.abs(v - SCALE) < 0.01) return end();
-    const doc = document.documentElement, ratio = (window.scrollY + innerHeight / 2) / Math.max(doc.scrollHeight, 1);
+    // le point sous le curseur (ou le centre) reste exactement au même endroit de l'écran, en vertical comme en horizontal
+    const an = zoomAnchor || { cx: innerWidth / 2, cy: innerHeight / 2 };
+    // on retient la page sous le curseur et le point exact de cette page ; après le rendu on le remet au même endroit de l'écran
+    let pi = pages.findIndex(({ div }) => { const r = div.getBoundingClientRect(); return an.cy >= r.top && an.cy <= r.bottom; });
+    if (pi < 0) pi = pages.findIndex(({ div }) => div.getBoundingClientRect().bottom > an.cy);
+    if (pi < 0) pi = 0;
+    const r0 = pages[pi].div.getBoundingClientRect(), fx = (an.cx - r0.left) / Math.max(r0.width, 1), fy = (an.cy - r0.top) / Math.max(r0.height, 1);
     await setZoom(v); end();
-    window.scrollTo(window.scrollX, ratio * doc.scrollHeight - innerHeight / 2);
+    const r1 = pages[pi].div.getBoundingClientRect();
+    window.scrollTo(window.scrollX + (r1.left + fx * r1.width - an.cx), window.scrollY + (r1.top + fy * r1.height - an.cy));
+    zoomAnchor = null;
   }, 220);
 }
 window.addEventListener("wheel", (e) => {
@@ -1994,7 +2137,8 @@ document.addEventListener("keydown", (e) => {
   else if (ctrl && key === "x" && inDoc() && e.target.closest?.(".tb") && !hasTextSelection() && copyItem()) { e.preventDefault(); cutElement(); }
   else if (e.key === "Delete" && !typing && inDoc() && multi.length > 1) { e.preventDefault(); deleteMulti(); }
   else if (e.key === "Delete" && !typing) { selectedShape ? deleteSelectedShape() : selectedHl ? deleteSelectedHl() : deleteSelected(); }
-  else if (e.key === "Escape") { closePopovers(); setSelectedShape(null); selectHl(null); }
+  else if ((e.key === "Enter" || e.key === "F2") && !typing && inDoc() && selected && !selected.deleted && !multi.length && currentMode() !== "erase" && !e.target.closest?.("button, input, select, textarea")) { e.preventDefault(); enterEdit(selected); }
+  else if (e.key === "Escape") { cancelPendingLine(); closePopovers(); setSelectedShape(null); selectHl(null); }
 });
 // Ctrl+V : élément copié dans le document (même avec du texte dans le presse-papiers), sinon texte venu d'ailleurs → nouvelle zone de texte
 document.addEventListener("paste", (e) => {
@@ -2035,3 +2179,41 @@ updateCounters();
     if (d && d.last) info.textContent = `Dernière copie automatique : ${d.last} (${d.count} gardées sur ${d.keep})`;
   }).catch(() => {});
 })();
+
+
+// ---------- Réglages d'outils mémorisés PAR DOCUMENT (texte, formes, dessin) ----------
+function collectDocTools() {
+  return { text: { ...defaults }, shape: { ...shapeDefaults }, draw: { ...drawDefaults } };
+}
+let _toolsReady = false; // on n'enregistre rien tant que les réglages du document ne sont pas chargés
+function saveDocTools() {
+  if (!_toolsReady || typeof docMeta === "undefined") return;
+  docMeta.tools = collectDocTools();
+  saveMeta();
+}
+const _baseTools = JSON.parse(JSON.stringify(collectDocTools()));
+function applyDocTools(t) {
+  if (!t) t = _baseTools; // un document sans réglages enregistrés repart des réglages d'origine
+  {
+    if (t.text) Object.assign(defaults, t.text);
+    if (t.shape) Object.assign(shapeDefaults, t.shape);
+    if (t.draw) Object.assign(drawDefaults, t.draw);
+    syncControls(selected || defaults);
+    if (typeof syncShapeControls === "function") syncShapeControls(selectedShape || shapeDefaults);
+    $("dStroke").value = drawDefaults.stroke; $("dWidth").value = drawDefaults.width;
+    if (typeof kindBtns !== "undefined") kindBtns.forEach((b) => b.classList.toggle("active", b.dataset.kind === shapeDefaults.kind));
+    penTouch();
+  }
+  _toolsReady = true;
+}
+
+
+// ---- Panneau d'options : masquer / afficher (comme les miniatures) ----
+function toggleOpts(force) {
+  const on = force ?? !prefs.opts;
+  prefs.opts = on; savePrefs();
+  document.body.classList.toggle("opts-off", !on);
+  $("optsBtn").setAttribute("aria-pressed", String(on));
+}
+$("optsBtn").addEventListener("click", () => toggleOpts());
+toggleOpts(prefs.opts !== false);

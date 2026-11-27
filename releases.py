@@ -8,6 +8,28 @@ Catégories : nouveautes, ameliorations, corrections. `date` : AAAA-MM-JJ (None 
 
 RELEASES = [
     {
+        "version": "1.7.0", "date": "2026-11-27",
+        "nouveautes": [
+            "Télécharger seulement certaines pages : Ctrl+clic (ou Maj+clic pour une plage) sur les miniatures, puis « Télécharger N pages » (un PDF « -extrait » avec les annotations).",
+            "Lignes et flèches en deux clics : un clic pour le premier point, un clic pour le second (Échap annule). Le glisser fonctionne toujours.",
+            "Panneau d'options masquable (bouton dans la barre du haut, retenu d'une visite à l'autre) et réduit aux symboles : plus de texte, les noms sont dans les infobulles.",
+            "Fenêtres internes pour saisir une note, un lien, un tableau, la première page ou confirmer : plus de boîtes du navigateur (Entrée valide, Échap annule).",
+            "Les réglages d'outils (police, taille, couleur, interligne, trait…) sont retenus par document.",
+        ],
+        "ameliorations": [
+            "Une zone de texte qu'on vient de créer n'a plus de limite de largeur : elle s'élargit seule jusqu'à Entrée ou jusqu'à ce que tu tires sa poignée de largeur.",
+            "Un clic sur une zone de texte la sélectionne en entier (déplacer, copier, dupliquer, couleur…) ; double-clic, Entrée ou F2 pour écrire dedans, Échap pour sortir.",
+            "Changer la couleur : sur une zone entière, sur les mots sélectionnés dans la zone, ou sur plusieurs éléments sélectionnés d'un coup (y compris les paragraphes du PDF).",
+            "Taille de police jusqu'à 1 point.",
+            "Le zoom garde le point sous le curseur (ou le centre) exactement en place, en vertical et en horizontal.",
+        ],
+        "corrections": [
+            "Surlignage : plus de rectangles en double (couleur plus foncée) ni de bandeau couvrant toute la page quand la sélection traverse deux pages.",
+            "Mise en forme (souligné, gras…) et création de zone ne déplacent plus la vue sur le côté.",
+            "Sélectionner une zone de texte désélectionne la forme précédemment choisie (la sélection multiple ne mélange plus les deux).",
+        ],
+    },
+    {
         "version": "1.6.1", "date": "2026-11-25",
         "ameliorations": [
             "Barre du haut plus fine : la ligne des calques est fusionnée avec la deuxième ligne (calques au centre, compteurs à droite).",

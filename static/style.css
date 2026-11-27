@@ -753,3 +753,47 @@ body[data-view="doc"] .layerline { display: grid; }
 
 /* plus de « vide » en balayant au bout du document : pas d'effet élastique ni de retour arrière sur le côté */
 html, body { overscroll-behavior-x: none; }
+
+/* petites fenêtres (dialog.js) */
+.dlg-back { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dlg { width: min(360px, 100%); background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow, 0 8px 30px rgba(0,0,0,.3)); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.dlg-title { font-weight: 600; }
+.dlg-label, .dlg-msg { font-size: .92em; color: var(--muted); white-space: pre-wrap; }
+.dlg-input { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius, 6px); background: var(--bg, transparent); color: inherit; resize: vertical; }
+.dlg-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dlg-btns button { font: inherit; padding: 5px 12px; border-radius: var(--radius, 6px); border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
+.dlg-btns .dlg-ok { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast, #fff); }
+.dlg-btns .dlg-ok.danger { background: #e03131; border-color: #e03131; }
+
+/* zone de texte : un clic la sélectionne en entier (déplacer, copier, dupliquer…), un double-clic entre dans le texte */
+.tb:not(.idle):not(.editing) .ed { pointer-events: none; user-select: none; -webkit-user-select: none; }
+.tb:not(.idle):not(.editing) { cursor: move; }
+.tb.editing .ed { cursor: text; }
+.tb.autow .ed { white-space: pre; overflow-wrap: normal; word-break: normal; }
+
+body.pending-line .hit, body.pending-line .sh-handle { pointer-events: none !important; }
+body.pending-line .page { cursor: crosshair; }
+
+.thumbsel { position: sticky; top: 0; z-index: 2; display: flex; gap: 4px; align-items: center; padding: 4px; background: var(--panel, #fff); border-bottom: 1px solid var(--border, #ddd); }
+.thumbdl { flex: 1; font-size: 12px; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+.thumbclr { font-size: 12px; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--border, #ccc); background: transparent; color: inherit; cursor: pointer; }
+.thumb.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.thumb.sel::after { content: "✓"; position: absolute; top: 4px; left: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; line-height: 16px; text-align: center; }
+.thumb { position: relative; }
+
+/* ---------- Panneau d'options : symboles seulement, masquable ---------- */
+.plabel .ic { width: 16px; height: 16px; display: block; }
+@media (min-width: 900px) {
+  .ctxbar:not(#findbar):not([hidden]) { width: 128px; padding: 10px 8px; gap: 6px; }
+  body:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 128px; }
+  body.has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 246px; }
+  .ctxbar:not(#findbar):not([hidden]) :is(.rl, .hint, .ctxtitle, .lhlabel > span:not(.plabel)) { display: none; }
+  .ctxbar:not(#findbar):not([hidden]) .prow { flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; padding: 3px 0; }
+  .ctxbar:not(#findbar):not([hidden]) .prow > .plabel { display: flex; margin: 0; flex: 0 0 auto; }
+  .ctxbar:not(#findbar):not([hidden]) .prow > :is(select, input) { flex: 1 1 0; min-width: 0; }
+  .ctxbar:not(#findbar):not([hidden]) .tool, .ctxbar:not(#findbar):not([hidden]) .seg-btn { padding: 5px 7px; }
+  body.opts-off .ctxbar:not(#findbar) { display: none !important; }
+  body.opts-off:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 0; }
+  body.opts-off.has-thumbs:has(.ctxbar:not(#findbar):not([hidden])) #viewer { margin-left: 118px; }
+}
+@media (max-width: 899px) { #optsBtn { display: none; } }
